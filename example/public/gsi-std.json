@@ -1,0 +1,9 @@
+{
+  "tilejson": "3.0.0",
+  "name": "GSI standard map (地理院タイル 標準地図)",
+  "tiles": ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
+  "minzoom": 0,
+  "maxzoom": 18,
+  "tileSize": 256,
+  "attribution": "<a href=\"https://maps.gsi.go.jp/development/ichiran.html\" target=\"_blank\">地理院タイル</a>"
+}

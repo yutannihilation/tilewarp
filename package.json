@@ -1,0 +1,66 @@
+{
+  "name": "@yutannihilation/tilewarp",
+  "version": "0.0.0",
+  "description": "Reproject Web Mercator XYZ tiles (vector and raster) into a custom CRS, one tile request at a time, with a MapLibre GL JS protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yutannihilation/tilewarp.git"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./maplibre": {
+      "types": "./dist/maplibre/index.d.ts",
+      "default": "./dist/maplibre/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "workspaces": [
+    "example"
+  ],
+  "packageManager": "bun@1.4.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit && bun run --filter=example typecheck",
+    "test": "vitest run",
+    "dev": "bun run --filter=example dev",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "@developmentseed/affine": "^0.9.0",
+    "@developmentseed/proj": "^0.9.0",
+    "@developmentseed/raster-reproject": "^0.9.0",
+    "@mapbox/vector-tile": "^3.0.0",
+    "pbf": "^5.1.2",
+    "proj4": "^2.22.0"
+  },
+  "peerDependencies": {
+    "maplibre-gl": "^6.16.0"
+  },
+  "peerDependenciesMeta": {
+    "maplibre-gl": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "@types/node": "26.6.5",
+    "fast-png": "8.0.0",
+    "maplibre-gl": "6.16.0",
+    "pmtiles": "^4.5.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

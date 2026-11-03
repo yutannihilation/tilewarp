@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tilewarp example</title>
+    <style>
+      html, body, #map { margin: 0; height: 100%; }
+      #panel {
+        position: absolute; top: 8px; left: 8px; z-index: 1; max-width: calc(100% - 32px);
+        background: #fffe; padding: 8px; border-radius: 4px;
+        font: 13px/1.6 system-ui, sans-serif; box-shadow: 0 1px 4px #0004;
+      }
+      #panel input[type=text] { width: 6em; }
+      #info, #stats { color: #555; white-space: pre; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <div id="panel">
+      <form id="form">
+        EPSG
+        <select id="preset">
+          <option value="6677">6677 Japan Plane Rectangular CS IX</option>
+          <option value="8857">8857 Equal Earth Greenwich</option>
+          <option value="3413">3413 NSIDC Polar Stereographic North</option>
+          <option value="54024">54024 Bonne</option>
+          <option value="3031">3031 Antarctic Polar Stereographic</option>
+          <option value="3978">3978 Canada Atlas Lambert</option>
+        </select>
+        or <input id="custom" type="text" placeholder="code" />
+        <button type="submit">Load</button>
+        <br />
+        <label><input type="radio" name="kind" value="vector" checked /> vector (OpenFreeMap)</label>
+        <label><input type="radio" name="kind" value="raster" /> raster (GSI)</label>
+        <label><input id="worker" type="checkbox" checked /> worker</label>
+        <label><input id="bounds" type="checkbox" /> tile boundaries</label>
+      </form>
+      <div id="info"></div>
+      <div id="stats"></div>
+    </div>
+    <div id="map"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
