@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+  </defs>
+  <rect width="760" height="380" fill="#fff"/>
+
+  <!-- Left: the output tile in the target CRS -->
+  <text x="110" y="24" text-anchor="middle" font-weight="600">Target CRS: output tile z/x/y</text>
+  <!-- cells over tile + buffer -->
+  <g stroke="#9ecae1" stroke-width="0.6">
+    <line x1="40" y1="60" x2="40" y2="200"/><line x1="57.5" y1="60" x2="57.5" y2="200"/><line x1="75" y1="60" x2="75" y2="200"/><line x1="92.5" y1="60" x2="92.5" y2="200"/><line x1="110" y1="60" x2="110" y2="200"/><line x1="127.5" y1="60" x2="127.5" y2="200"/><line x1="145" y1="60" x2="145" y2="200"/><line x1="162.5" y1="60" x2="162.5" y2="200"/><line x1="180" y1="60" x2="180" y2="200"/>
+    <line x1="40" y1="60" x2="180" y2="60"/><line x1="40" y1="77.5" x2="180" y2="77.5"/><line x1="40" y1="95" x2="180" y2="95"/><line x1="40" y1="112.5" x2="180" y2="112.5"/><line x1="40" y1="130" x2="180" y2="130"/><line x1="40" y1="147.5" x2="180" y2="147.5"/><line x1="40" y1="165" x2="180" y2="165"/><line x1="40" y1="182.5" x2="180" y2="182.5"/><line x1="40" y1="200" x2="180" y2="200"/>
+  </g>
+  <!-- buffer -->
+  <rect x="40" y="60" width="140" height="140" fill="none" stroke="#1f77b4" stroke-dasharray="4 3"/>
+  <!-- tile -->
+  <rect x="50" y="70" width="120" height="120" fill="#1f77b4" fill-opacity="0.12" stroke="#1f77b4" stroke-width="1.5"/>
+  <!-- samples at the cells' corners -->
+  <g fill="#1f77b4">
+    <g id="row"><circle cx="40" cy="60" r="1.7"/><circle cx="57.5" cy="60" r="1.7"/><circle cx="75" cy="60" r="1.7"/><circle cx="92.5" cy="60" r="1.7"/><circle cx="110" cy="60" r="1.7"/><circle cx="127.5" cy="60" r="1.7"/><circle cx="145" cy="60" r="1.7"/><circle cx="162.5" cy="60" r="1.7"/><circle cx="180" cy="60" r="1.7"/></g>
+    <use href="#row" y="17.5"/><use href="#row" y="35"/><use href="#row" y="52.5"/><use href="#row" y="70"/><use href="#row" y="87.5"/><use href="#row" y="105"/><use href="#row" y="122.5"/><use href="#row" y="140"/>
+  </g>
+  <text x="110" y="222" text-anchor="middle" fill="#1f77b4">8192 units + 128 buffer</text>
+  <text x="110" y="240" text-anchor="middle" fill="#555">64 × 64 cells over tile and buffer,</text>
+  <text x="110" y="256" text-anchor="middle" fill="#555">65 × 65 samples at the corners</text>
+  <text x="110" y="272" text-anchor="middle" fill="#555" font-size="11">(the "field"; drawn with 8 × 8 cells)</text>
+
+  <!-- Arrow -->
+  <line x1="196" y1="130" x2="268" y2="130" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="232" y="118" text-anchor="middle">to3857</text>
+  <text x="232" y="150" text-anchor="middle" fill="#555" font-size="11">per sample</text>
+
+  <!-- Right: Web Mercator source tiles -->
+  <text x="500" y="24" text-anchor="middle" font-weight="600">Web Mercator: source tiles at the chosen zoom</text>
+  <g stroke="#aaa" fill="none">
+    <rect x="300" y="50" width="100" height="100"/><rect x="400" y="50" width="100" height="100"/><rect x="500" y="50" width="100" height="100"/><rect x="600" y="50" width="100" height="100"/>
+    <rect x="300" y="150" width="100" height="100"/><rect x="400" y="150" width="100" height="100"/><rect x="500" y="150" width="100" height="100"/><rect x="600" y="150" width="100" height="100"/>
+  </g>
+  <!-- tiles a cell reaches into, highlighted -->
+  <g fill="#fff3c4" stroke="#aaa">
+    <rect x="400" y="50" width="100" height="100"/><rect x="500" y="50" width="100" height="100"/>
+    <rect x="400" y="150" width="100" height="100"/><rect x="500" y="150" width="100" height="100"/>
+  </g>
+  <!-- the field's image: the cells, curved -->
+  <g fill="none" stroke="#1f77b4" stroke-width="0.5" stroke-opacity="0.7">
+    <path d="M 430 90 Q 500 70 575 95"/><path d="M 429 119 Q 500 101 572 125"/><path d="M 427 148 Q 497 132 569 155"/><path d="M 425 177 Q 493 163 565 185"/><path d="M 425 205 Q 490 230 560 215"/>
+    <path d="M 430 90 Q 415 150 425 205"/><path d="M 466 80 Q 452 143 460 214"/><path d="M 502 76 Q 490 140 494 222"/><path d="M 538 83 Q 527 142 528 220"/><path d="M 575 95 Q 580 160 560 215"/>
+  </g>
+  <path d="M 430 90 Q 500 70 575 95 Q 580 160 560 215 Q 490 230 425 205 Q 415 150 430 90 Z" fill="#1f77b4" fill-opacity="0.15" stroke="#1f77b4" stroke-width="1.5"/>
+  <!-- coverage per tile: the box of the cells reaching into it, cut at the tile's edges -->
+  <g fill="none" stroke="#d62828" stroke-dasharray="3 2" stroke-width="1.2">
+    <rect x="415" y="76" width="85" height="74"/>
+    <rect x="500" y="76" width="80" height="74"/>
+    <rect x="415" y="150" width="85" height="78"/>
+    <rect x="500" y="150" width="80" height="72"/>
+  </g>
+  <text x="604" y="84" fill="#d62828" font-size="11">coverage</text>
+  <text x="604" y="98" fill="#d62828" font-size="11">per tile</text>
+  <text x="500" y="276" text-anchor="middle" fill="#555">A tile some cell reaches into is read (at most 16 by sample; the zoom is lowered to fit).</text>
+  <text x="500" y="294" text-anchor="middle" fill="#555">Per tile, the box around those cells, cut at the tile's edges, is the part worth looking at.</text>
+  <text x="500" y="320" text-anchor="middle" fill="#555" font-size="12">A sample with no Mercator position (beyond ±85°, outside the CRS's domain) is left out;</text>
+  <text x="500" y="336" text-anchor="middle" fill="#555" font-size="12">a cell's edge from a positioned corner is bisected to where the positions end.</text>
+  <text x="500" y="352" text-anchor="middle" fill="#555" font-size="12">That is how a tile with a pole, or across the antimeridian, is handled.</text>
+</svg>
