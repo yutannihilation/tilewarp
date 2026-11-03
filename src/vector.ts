@@ -171,7 +171,8 @@ type VectorSource = Pick<TileSource, 'minzoom' | 'maxzoom'>
 
 /**
  * Render output tile `z/x/y`: MVT bytes, empty when nothing of the source
- * falls in the tile.
+ * falls in the tile or the tile is too coarse for the source (it would read
+ * too many tiles even at the source's `minzoom`).
  *
  * @param load - a prepared source tile, or `null` where the source has none
  */

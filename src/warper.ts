@@ -58,7 +58,9 @@ export class Warper {
    * @param signal - once aborted, the tile is not sampled: checked when the
    *   source tiles are in, since sampling runs to the end once started. Source
    *   reads under way still finish and are cached, as other tiles share them.
-   * @returns `null` when no pixel of the tile is in Web Mercator.
+   * @returns `null` when no pixel of the tile is in Web Mercator, or when the
+   *   tile is too coarse for the source (it would read too many tiles even at
+   *   the source's `minzoom`).
    */
   async renderRasterTile(
     crs: Crs,
@@ -101,7 +103,9 @@ export class Warper {
   }
 
   /**
-   * MVT bytes of output tile `z/x/y`, empty when nothing of the source falls in it.
+   * MVT bytes of output tile `z/x/y`, empty when nothing of the source falls in
+   * it or the tile is too coarse for the source (it would read too many tiles
+   * even at the source's `minzoom`).
    *
    * @param signal - once aborted, the tile is not transformed: checked as each
    *   source tile comes in, which is the last point before the transform, as

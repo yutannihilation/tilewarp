@@ -132,7 +132,10 @@ export function buildCrs(epsg: number, projjson: EpsgProjJson): Crs {
  */
 export type FetchJson = (url: string) => Promise<Response>
 
-/** @throws {CrsError} If epsg.io does not know the code. */
+/**
+ * @throws {CrsError} If epsg.io does not know the code.
+ * @throws {UpstreamError} If epsg.io answers with an error or with a body that is not JSON.
+ */
 export async function fetchEpsgProjJson(epsg: number, fetchJson: FetchJson): Promise<EpsgProjJson> {
   const url = `https://epsg.io/${epsg}.json`
   const resp = await fetchJson(url)
@@ -142,7 +145,11 @@ export async function fetchEpsgProjJson(epsg: number, fetchJson: FetchJson): Pro
   if (!resp.ok) {
     throw new UpstreamError(`Failed to fetch ${url}: HTTP ${resp.status}`)
   }
-  return (await resp.json()) as EpsgProjJson
+  try {
+    return (await resp.json()) as EpsgProjJson
+  } catch (error) {
+    throw new UpstreamError(`Failed to read JSON from ${url}`, { cause: error })
+  }
 }
 
 const CRS_CACHE = new Map<number, Promise<Crs>>()

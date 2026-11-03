@@ -280,13 +280,22 @@ function sourceTileKeys(field: MercatorField, z: number, tileSize: number): Set<
 }
 
 /**
+ * The deepest source zoom read: {@link tileKey} is exact while `4^z` stays
+ * within `Number.MAX_SAFE_INTEGER`. A z26 tile is about 60 cm wide.
+ */
+const MAX_SOURCE_ZOOM = 26
+
+/**
  * The source zoom to sample: the one nearest to the output pixels'
- * resolution, clamped to `[minzoom, maxzoom]`, then lowered while it would
- * need more than `maxTiles` tiles. Nearest rather than the next finer one
- * keeps a cartographic basemap's labels and symbols within 0.71x-1.41x of
- * their designed size (the next finer zoom would draw them at 0.5x-1x).
+ * resolution, clamped to `[minzoom, maxzoom]` (and to {@link MAX_SOURCE_ZOOM}),
+ * then lowered while it would need more than `maxTiles` tiles. Nearest rather
+ * than the next finer one keeps a cartographic basemap's labels and symbols
+ * within 0.71x-1.41x of their designed size (the next finer zoom would draw
+ * them at 0.5x-1x).
  *
- * @returns `null` when the field has no pixel in Web Mercator.
+ * @returns `null` when the field has no pixel in Web Mercator, or when even
+ *   the source's `minzoom` needs more than `maxTiles` tiles (the output tile
+ *   is coarser than the source serves, as below a source's `minzoom` in MapLibre).
  */
 export function chooseSourceZoom(
   field: MercatorField,
@@ -297,15 +306,13 @@ export function chooseSourceZoom(
   const pixelSize = medianPixelSize(field, size)
   if (Number.isNaN(pixelSize)) return null
   const ideal = Math.round(Math.log2(WORLD / (source.tileSize * pixelSize)))
-  let z = clamp(ideal, source.minzoom, source.maxzoom)
+  let z = clamp(ideal, source.minzoom, Math.min(source.maxzoom, MAX_SOURCE_ZOOM))
   let keys = sourceTileKeys(field, z, source.tileSize)
   while (keys.size > maxTiles && z > source.minzoom) {
     z--
     keys = sourceTileKeys(field, z, source.tileSize)
   }
-  if (keys.size > maxTiles) {
-    throw new Error(`Tile needs ${keys.size} source tiles even at zoom ${z}`)
-  }
+  if (keys.size > maxTiles) return null
   return { z, keys }
 }
 
