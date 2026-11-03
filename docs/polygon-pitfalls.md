@@ -23,12 +23,6 @@ Fiord on Baffin Island (about 71°W, 70.6°N), in 4096-extent tile units.
 | ----------------------------------------------------------------------- | ----------------------------------------- |
 | ![Before: a water triangle over land](figures/sam-ford-3978-before.jpg) | ![After](figures/sam-ford-3978-after.jpg) |
 
-The "before" screenshots are from
-[tilewarper](https://github.com/yutannihilation/tilewarper), the Cloudflare
-Worker that serves this warp, as deployed on October 30, 2026, with the
-triangle in EPSG:3413 outlined by hand; the "after" ones are the same places
-after both fixes.
-
 ## 1. Zero-width bridges from clipping
 
 ### How a bridge is made

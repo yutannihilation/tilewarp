@@ -52,9 +52,6 @@ flowchart LR
 The same pipeline runs outside the browser through the core API: a
 `Warper` with any `MercatorSource` (`XyzSource`, or your own, such as a
 reader for a PMTiles archive) and a `Crs` from `resolveCrs`.
-[tilewarper](https://github.com/yutannihilation/tilewarper) is that: a
-Cloudflare Worker that reads PMTiles archives and serves the warped tiles over
-HTTP.
 
 ## One request, start to end
 
