@@ -1,8 +1,12 @@
 /**
- * Per-request timing breakdown for `.mvt` and `.png` tile responses, logged
- * as a one-line summary to the console and, when the request asks for it
- * with `timing=1`, reported in the `Server-Timing` HTTP header (for browser
- * DevTools). Stages are measured once per request, around whole steps.
+ * Per-request timing breakdown of an output tile, `.mvt` or `.png`. `Warper`
+ * and `renderVectorTile` fill in the stages they run, the source zoom, the
+ * tile counts and the MVT size. `misses` is counted by `Warper`'s source tile
+ * reads, so it stays 0 when `renderVectorTile` is given another loader.
+ * `crs`, `total` and the raster `encode` are left to the caller,
+ * which runs those steps. Stages are measured once per request, around whole
+ * steps. The formatters turn a breakdown into a one-line console summary or
+ * a `Server-Timing` header value (for browser DevTools).
  */
 
 /** Timing breakdown (ms) and counts for one `.mvt` tile request. */
