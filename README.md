@@ -157,4 +157,5 @@ Bundle sizes, minified and gzipped: `@yutannihilation/tilewarp` 194 kB / 64 kB,
 
 ## License
 
-MIT
+MIT, except the EPSG definitions in `test/fixtures/`, which come from the EPSG
+Dataset under its own terms of use (see [test/fixtures/README.md](test/fixtures/README.md)).
