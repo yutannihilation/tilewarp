@@ -10,8 +10,7 @@ MapLibre can show a map in a registered CRS, but it does not reproject tile
 content. For an output tile in the CRS's grid, tilewarp fetches the Web
 Mercator source tiles under it from an HTTPS XYZ source, warps them, and
 returns the tile. It runs in the browser as a MapLibre protocol, or anywhere
-`fetch` runs ([tilewarper](https://github.com/yutannihilation/tilewarper)
-serves the same warp from Cloudflare Workers).
+`fetch` runs (tilewarper serves the same warp from Cloudflare Workers).
 
 ## MapLibre GL JS
 
