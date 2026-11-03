@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+  </defs>
+  <rect width="760" height="420" fill="#fff"/>
+  <text x="380" y="24" text-anchor="middle" font-weight="600">Coverage is built cell by cell: each cell's box in Mercator joins the coverage of the tiles it spans</text>
+
+  <!-- ===== Panel A: a cell inside the data ===== -->
+  <g transform="translate(10 0)">
+    <text x="120" y="56" text-anchor="middle" fill="#555">A cell inside the data</text>
+    <rect x="100" y="72" width="40" height="40" fill="#1f77b4" fill-opacity="0.12" stroke="#9ecae1"/>
+    <g fill="#1f77b4"><circle cx="100" cy="72" r="3"/><circle cx="140" cy="72" r="3"/><circle cx="100" cy="112" r="3"/><circle cx="140" cy="112" r="3"/></g>
+    <text x="120" y="128" text-anchor="middle" font-size="11" fill="#555">four samples</text>
+    <line x1="120" y1="136" x2="120" y2="160" stroke="#333" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="148" y="152" font-size="11">to3857</text>
+    <!-- two source tiles -->
+    <g fill="#fff3c4" stroke="#aaa"><rect x="30" y="170" width="90" height="90"/><rect x="120" y="170" width="90" height="90"/></g>
+    <text x="75" y="276" text-anchor="middle" font-size="11" fill="#555">tile x</text>
+    <text x="165" y="276" text-anchor="middle" font-size="11" fill="#555">tile x+1</text>
+    <!-- the cell's image -->
+    <path d="M 80 190 L 160 198 L 152 240 L 72 232 Z" fill="#1f77b4" fill-opacity="0.2" stroke="#1f77b4"/>
+    <g fill="#1f77b4"><circle cx="80" cy="190" r="2.5"/><circle cx="160" cy="198" r="2.5"/><circle cx="152" cy="240" r="2.5"/><circle cx="72" cy="232" r="2.5"/></g>
+    <!-- its box, cut at the tile edge -->
+    <rect x="72" y="190" width="48" height="50" fill="#d62828" fill-opacity="0.12" stroke="#d62828" stroke-dasharray="3 2"/>
+    <rect x="120" y="190" width="40" height="50" fill="#d62828" fill-opacity="0.12" stroke="#d62828" stroke-dasharray="3 2"/>
+    <text x="120" y="300" text-anchor="middle" font-size="12">The box around the four positions,</text>
+    <text x="120" y="316" text-anchor="middle" font-size="12">cut at the tile edge, is added to</text>
+    <text x="120" y="332" text-anchor="middle" font-size="12">each tile's coverage (a union of boxes).</text>
+    <text x="120" y="356" text-anchor="middle" font-size="11" fill="#555">A tile the box only touches at its</text>
+    <text x="120" y="370" text-anchor="middle" font-size="11" fill="#555">edge is not counted.</text>
+  </g>
+
+  <!-- ===== Panel B: across the antimeridian ===== -->
+  <g transform="translate(260 0)">
+    <text x="120" y="56" text-anchor="middle" fill="#555">A cell across the antimeridian</text>
+    <rect x="100" y="72" width="40" height="40" fill="#1f77b4" fill-opacity="0.12" stroke="#9ecae1"/>
+    <g fill="#1f77b4"><circle cx="100" cy="72" r="3"/><circle cx="140" cy="72" r="3"/><circle cx="100" cy="112" r="3"/><circle cx="140" cy="112" r="3"/></g>
+    <line x1="120" y1="136" x2="120" y2="160" stroke="#333" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="148" y="152" font-size="11">to3857</text>
+    <!-- last tile of the world and the first, side by side across ±180° -->
+    <g fill="#fff3c4" stroke="#aaa"><rect x="30" y="170" width="90" height="90"/><rect x="120" y="170" width="90" height="90"/></g>
+    <line x1="120" y1="164" x2="120" y2="266" stroke="#333" stroke-width="2"/>
+    <text x="126" y="182" font-size="11">±180°</text>
+    <text x="75" y="276" text-anchor="middle" font-size="11" fill="#555">tile n−1 (x ≈ 0.98 n)</text>
+    <text x="165" y="276" text-anchor="middle" font-size="11" fill="#555">tile 0 (x ≈ 0.02 n)</text>
+    <path d="M 84 190 L 158 196 L 154 240 L 78 234 Z" fill="#1f77b4" fill-opacity="0.2" stroke="#1f77b4"/>
+    <g fill="#1f77b4"><circle cx="84" cy="190" r="2.5"/><circle cx="158" cy="196" r="2.5"/><circle cx="154" cy="240" r="2.5"/><circle cx="78" cy="234" r="2.5"/></g>
+    <rect x="78" y="190" width="42" height="50" fill="#d62828" fill-opacity="0.12" stroke="#d62828" stroke-dasharray="3 2"/>
+    <rect x="120" y="190" width="38" height="50" fill="#d62828" fill-opacity="0.12" stroke="#d62828" stroke-dasharray="3 2"/>
+    <text x="120" y="300" text-anchor="middle" font-size="12">The positions on the far side are taken</text>
+    <text x="120" y="316" text-anchor="middle" font-size="12">in the copy of the world nearest the first</text>
+    <text x="120" y="332" text-anchor="middle" font-size="12">one (x ≈ 1.02 n), so the box stays small;</text>
+    <text x="120" y="348" text-anchor="middle" font-size="12">the tile index is wrapped (mod n) when</text>
+    <text x="120" y="364" text-anchor="middle" font-size="12">the box is added.</text>
+  </g>
+
+  <!-- ===== Panel C: at the edge of the data ===== -->
+  <g transform="translate(510 0)">
+    <text x="120" y="56" text-anchor="middle" fill="#555">A cell at the edge of the data</text>
+    <rect x="100" y="72" width="40" height="40" fill="#1f77b4" fill-opacity="0.12" stroke="#9ecae1"/>
+    <g fill="none" stroke="#d62828" stroke-width="1.5"><path d="M97,69 l6,6 m0,-6 l-6,6"/><path d="M137,69 l6,6 m0,-6 l-6,6"/></g>
+    <g fill="#1f77b4"><circle cx="100" cy="112" r="3"/><circle cx="140" cy="112" r="3"/></g>
+    <text x="120" y="128" text-anchor="middle" font-size="11" fill="#d62828">two samples have no position</text>
+    <line x1="120" y1="136" x2="120" y2="160" stroke="#333" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="148" y="152" font-size="11">to3857</text>
+    <g fill="#fff3c4" stroke="#aaa"><rect x="30" y="170" width="90" height="90"/><rect x="120" y="170" width="90" height="90"/></g>
+    <!-- where the data ends: the latitude limit -->
+    <line x1="24" y1="186" x2="216" y2="186" stroke="#d62828" stroke-dasharray="4 3"/>
+    <text x="34" y="182" font-size="10" fill="#d62828">85.05° N: positions end</text>
+    <!-- the two positioned corners -->
+    <g fill="#1f77b4"><circle cx="76" cy="236" r="2.5"/><circle cx="156" cy="242" r="2.5"/></g>
+    <!-- bisected edges climbing to the limit -->
+    <line x1="76" y1="236" x2="80" y2="188" stroke="#d62828" stroke-width="1.5"/>
+    <line x1="156" y1="242" x2="152" y2="188" stroke="#d62828" stroke-width="1.5"/>
+    <g fill="#d62828"><circle cx="80" cy="188" r="2.5"/><circle cx="152" cy="188" r="2.5"/></g>
+    <line x1="76" y1="236" x2="156" y2="242" stroke="#1f77b4"/>
+    <rect x="76" y="188" width="44" height="54" fill="#d62828" fill-opacity="0.12" stroke="#d62828" stroke-dasharray="3 2"/>
+    <rect x="120" y="188" width="36" height="54" fill="#d62828" fill-opacity="0.12" stroke="#d62828" stroke-dasharray="3 2"/>
+    <text x="120" y="300" text-anchor="middle" font-size="12">An edge with one positioned end is</text>
+    <text x="120" y="316" text-anchor="middle" font-size="12">bisected to where the positions end,</text>
+    <text x="120" y="332" text-anchor="middle" font-size="12">and the box reaches that far. A cell</text>
+    <text x="120" y="348" text-anchor="middle" font-size="12">with no positioned corner is skipped.</text>
+    <text x="120" y="372" text-anchor="middle" font-size="11" fill="#555">(The row above the limit is tile row 0;</text>
+    <text x="120" y="386" text-anchor="middle" font-size="11" fill="#555">y is clamped to the world's rows.)</text>
+  </g>
+</svg>

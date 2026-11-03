@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="350" viewBox="0 0 720 350" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <rect width="720" height="350" fill="#fff"/>
+  <text x="360" y="24" text-anchor="middle" font-weight="600">Adaptive densification: a straight source segment becomes a curve in the target</text>
+
+  <!-- Source side -->
+  <text x="120" y="56" text-anchor="middle" fill="#555">source tile units</text>
+  <line x1="40" y1="120" x2="200" y2="120" stroke="#555" stroke-width="2"/>
+  <circle cx="40" cy="120" r="4" fill="#333"/><text x="40" y="142" text-anchor="middle">a</text>
+  <circle cx="200" cy="120" r="4" fill="#333"/><text x="200" y="142" text-anchor="middle">b</text>
+  <circle cx="120" cy="120" r="4" fill="#d62828"/><text x="120" y="108" text-anchor="middle" fill="#d62828">m = (a+b)/2</text>
+
+  <!-- arrow -->
+  <path d="M 230 120 L 285 120" stroke="#333" stroke-width="1.5" fill="none"/>
+  <path d="M 277 114 L 287 120 L 277 126" stroke="#333" stroke-width="1.5" fill="none"/>
+  <text x="258" y="108" text-anchor="middle" font-size="12">f</text>
+
+  <!-- Target side -->
+  <text x="470" y="56" text-anchor="middle" fill="#555">output tile units</text>
+  <!-- true curve -->
+  <path d="M 320 150 Q 470 50 620 140" fill="none" stroke="#2a9d8f" stroke-width="2"/>
+  <!-- chord -->
+  <line x1="320" y1="150" x2="620" y2="140" stroke="#999" stroke-dasharray="5 4"/>
+  <circle cx="320" cy="150" r="4" fill="#333"/><text x="320" y="172" text-anchor="middle">f(a)</text>
+  <circle cx="620" cy="140" r="4" fill="#333"/><text x="620" y="162" text-anchor="middle">f(b)</text>
+  <!-- midpoint of chord and image of m -->
+  <circle cx="470" cy="145" r="3" fill="#999"/>
+  <circle cx="470" cy="100" r="4" fill="#d62828"/>
+  <text x="488" y="98" fill="#d62828">f(m)</text>
+  <line x1="470" y1="100" x2="470" y2="145" stroke="#d62828" stroke-width="1.5"/>
+  <text x="458" y="126" text-anchor="end" fill="#d62828" font-size="12">d</text>
+  <text x="470" y="196" text-anchor="middle" font-size="12">first: |f(a) f(b)| ≤ the tile's segment limit → stop; m is never transformed</text>
+  <text x="470" y="214" text-anchor="middle" font-size="12">else d &gt; 1 unit → keep f(m), recurse on a–m and m–b (depth ≤ 8)</text>
+  <text x="470" y="232" text-anchor="middle" font-size="12">d ≤ 1 unit → the chord is close enough, stop</text>
+  <!-- result polyline -->
+  <polyline points="320,150 358,120 395,104 432,98 470,100 508,105 546,113 584,125 620,140" fill="none" stroke="#1f77b4" stroke-width="1.5"/>
+  <g fill="#1f77b4"><circle cx="358" cy="120" r="2.5"/><circle cx="395" cy="104" r="2.5"/><circle cx="432" cy="98" r="2.5"/><circle cx="508" cy="105" r="2.5"/><circle cx="546" cy="113" r="2.5"/><circle cx="584" cy="125" r="2.5"/></g>
+  <text x="470" y="256" text-anchor="middle" fill="#1f77b4" font-size="12">result: the segment's image as a polyline within tolerance of the curve</text>
+
+  <!-- seam / no image -->
+  <rect x="40" y="276" width="640" height="56" rx="6" fill="#fdecea" stroke="#d62828"/>
+  <text x="360" y="298" text-anchor="middle" font-size="12">If f(m) has no position (outside the CRS's domain), or at depth 8 the image still jumps more than half the</text>
+  <text x="360" y="316" text-anchor="middle" font-size="12">tile matrix set's width (a projection seam): a line is split there, a ring is dropped.</text>
+</svg>

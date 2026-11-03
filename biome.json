@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!test/fixtures"]
+    "includes": ["**", "!**/dist", "!test/fixtures", "!docs/figures"]
   },
   "formatter": {
     "indentStyle": "space",

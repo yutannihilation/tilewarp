@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="280" viewBox="0 0 760 280" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+  </defs>
+  <rect width="760" height="280" fill="#fff"/>
+  <text x="380" y="24" text-anchor="middle" font-weight="600">One transform per source tile: source tile units → output tile units</text>
+
+  <!-- boxes -->
+  <g stroke="#555" fill="#f4f4f4">
+    <rect x="20" y="60" width="150" height="56" rx="6"/>
+    <rect x="215" y="60" width="150" height="56" rx="6"/>
+    <rect x="410" y="60" width="150" height="56" rx="6"/>
+    <rect x="605" y="60" width="140" height="56" rx="6"/>
+  </g>
+  <text x="95" y="83" text-anchor="middle">source tile units</text>
+  <text x="95" y="101" text-anchor="middle" fill="#555" font-size="12">0 … 4096, y down</text>
+  <text x="290" y="83" text-anchor="middle">EPSG:3857 meters</text>
+  <text x="290" y="101" text-anchor="middle" fill="#555" font-size="12">Web Mercator</text>
+  <text x="485" y="83" text-anchor="middle">target CRS units</text>
+  <text x="485" y="101" text-anchor="middle" fill="#555" font-size="12">e.g. EPSG:6677 meters</text>
+  <text x="675" y="83" text-anchor="middle">output tile units</text>
+  <text x="675" y="101" text-anchor="middle" fill="#555" font-size="12">−128 … 8320, y down</text>
+
+  <!-- arrows -->
+  <g stroke="#333" stroke-width="1.5" marker-end="url(#arr)">
+    <line x1="170" y1="88" x2="213" y2="88"/>
+    <line x1="365" y1="88" x2="408" y2="88"/>
+    <line x1="560" y1="88" x2="603" y2="88"/>
+  </g>
+  <text x="192" y="136" text-anchor="middle" font-size="12">affine</text>
+  <text x="192" y="152" text-anchor="middle" font-size="11" fill="#555">tileAffine(MERCATOR_TMS,</text>
+  <text x="192" y="166" text-anchor="middle" font-size="11" fill="#555">sz, sx, sy, extent)</text>
+  <text x="387" y="136" text-anchor="middle" font-size="12">proj4</text>
+  <text x="387" y="152" text-anchor="middle" font-size="11" fill="#555">from3857 or</text>
+  <text x="387" y="166" text-anchor="middle" font-size="11" fill="#555">from3857Checked</text>
+  <text x="582" y="136" text-anchor="middle" font-size="12">affine</text>
+  <text x="582" y="152" text-anchor="middle" font-size="11" fill="#555">invert(tileAffine(tms,</text>
+  <text x="582" y="166" text-anchor="middle" font-size="11" fill="#555">z, x, y, 8192))</text>
+
+  <!-- smooth decision -->
+  <rect x="20" y="190" width="720" height="46" rx="6" fill="#fff3c4" stroke="#c9a227"/>
+  <text x="380" y="209" text-anchor="middle" font-size="12">9 × 9 grid of the tile's points through the checked transform: every point has an image?</text>
+  <text x="380" y="226" text-anchor="middle" font-size="12">yes → unchecked proj4, and the grid's bending sets a segment limit · no → checked proj4, full densify</text>
+  <text x="380" y="264" text-anchor="middle" fill="#555" font-size="11">Doubles throughout, integers at the end; NaN where the CRS has no position.</text>
+</svg>

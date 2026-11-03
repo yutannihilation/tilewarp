@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="330" viewBox="0 0 760 330" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="az" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+  </defs>
+  <rect width="760" height="330" fill="#fff"/>
+  <text x="380" y="24" text-anchor="middle" font-weight="600">The source zoom: source tiles about as large as the output tile, and no more than 16 of them</text>
+
+  <!-- Left: a cell's size in Mercator -->
+  <text x="120" y="56" text-anchor="middle" fill="#555">a cell's size in Mercator</text>
+  <path d="M 60 100 L 150 92 L 162 170 L 72 178 Z" fill="#1f77b4" fill-opacity="0.15" stroke="#1f77b4"/>
+  <g fill="#1f77b4"><circle cx="60" cy="100" r="3"/><circle cx="150" cy="92" r="3"/><circle cx="72" cy="178" r="3"/><circle cx="162" cy="170" r="3"/></g>
+  <line x1="60" y1="100" x2="150" y2="92" stroke="#333" stroke-width="1.5" marker-end="url(#az)"/>
+  <line x1="60" y1="100" x2="72" y2="178" stroke="#333" stroke-width="1.5" marker-end="url(#az)"/>
+  <text x="105" y="84" text-anchor="middle" font-size="11">to the right neighbour</text>
+  <text x="18" y="146" font-size="11">to the</text><text x="18" y="160" font-size="11">one below</text>
+  <text x="120" y="204" text-anchor="middle" font-size="12">s = √|cross product|</text>
+  <text x="120" y="222" text-anchor="middle" font-size="12">(the median over every fourth</text>
+  <text x="120" y="238" text-anchor="middle" font-size="12">cell each way, where positioned)</text>
+
+  <!-- Middle: the formula -->
+  <rect x="250" y="70" width="240" height="120" rx="6" fill="#fff3c4" stroke="#c9a227"/>
+  <text x="370" y="94" text-anchor="middle" font-size="12">64 cells of size s ≈ one source tile, so</text>
+  <text x="370" y="118" text-anchor="middle">z = round(log₂(world / (64 · s)))</text>
+  <text x="370" y="142" text-anchor="middle" font-size="12">clamped to the archive's zoom range:</text>
+  <text x="370" y="158" text-anchor="middle" font-size="12">the tiles are 0.71 to 1.41 times the</text>
+  <text x="370" y="174" text-anchor="middle" font-size="12">output tile's ground size.</text>
+  <text x="370" y="214" text-anchor="middle" font-size="12">Above the archive's maximum zoom the output</text>
+  <text x="370" y="230" text-anchor="middle" font-size="12">tile reads a small part of a maximum-zoom tile.</text>
+
+  <!-- Right: too many tiles near the pole → lower the zoom -->
+  <text x="630" y="56" text-anchor="middle" fill="#555">near a pole, Mercator stretches</text>
+  <!-- z: 8x8 grid, blob along the top touching many tiles -->
+  <g stroke="#ccc" fill="none">
+    <rect x="530" y="70" width="96" height="96"/>
+    <line x1="542" y1="70" x2="542" y2="166"/><line x1="554" y1="70" x2="554" y2="166"/><line x1="566" y1="70" x2="566" y2="166"/><line x1="578" y1="70" x2="578" y2="166"/><line x1="590" y1="70" x2="590" y2="166"/><line x1="602" y1="70" x2="602" y2="166"/><line x1="614" y1="70" x2="614" y2="166"/>
+    <line x1="530" y1="82" x2="626" y2="82"/><line x1="530" y1="94" x2="626" y2="94"/><line x1="530" y1="106" x2="626" y2="106"/><line x1="530" y1="118" x2="626" y2="118"/><line x1="530" y1="130" x2="626" y2="130"/><line x1="530" y1="142" x2="626" y2="142"/><line x1="530" y1="154" x2="626" y2="154"/>
+  </g>
+  <rect x="530" y="70" width="96" height="24" fill="#fff3c4" fill-opacity="0.9"/>
+  <path d="M 530 70 L 626 70 L 626 78 Q 578 94 530 78 Z" fill="#1f77b4" fill-opacity="0.3" stroke="#1f77b4"/>
+  <text x="578" y="182" text-anchor="middle" font-size="11">at z: 16 tiles, too many</text>
+  <!-- z-1: 4x4 grid -->
+  <g stroke="#ccc" fill="none">
+    <rect x="650" y="70" width="96" height="96"/>
+    <line x1="674" y1="70" x2="674" y2="166"/><line x1="698" y1="70" x2="698" y2="166"/><line x1="722" y1="70" x2="722" y2="166"/>
+    <line x1="650" y1="94" x2="746" y2="94"/><line x1="650" y1="118" x2="746" y2="118"/><line x1="650" y1="142" x2="746" y2="142"/>
+  </g>
+  <rect x="650" y="70" width="96" height="24" fill="#fff3c4" fill-opacity="0.9"/>
+  <path d="M 650 70 L 746 70 L 746 78 Q 698 94 650 78 Z" fill="#1f77b4" fill-opacity="0.3" stroke="#1f77b4"/>
+  <text x="698" y="182" text-anchor="middle" font-size="11">at z−1: 4</text>
+  <line x1="630" y1="120" x2="648" y2="120" stroke="#333" stroke-width="1.5" marker-end="url(#az)"/>
+  <text x="638" y="214" text-anchor="middle" font-size="12">A field whose samples fall in more than</text>
+  <text x="638" y="230" text-anchor="middle" font-size="12">16 tiles lowers the zoom until they fit</text>
+  <text x="638" y="246" text-anchor="middle" font-size="12">(the count is by sample here; the cells</text>
+  <text x="638" y="262" text-anchor="middle" font-size="12">may then reach into a few more tiles).</text>
+
+  <text x="380" y="300" text-anchor="middle" font-size="12" fill="#555">A field with no positioned cell at all (the output tile is entirely outside the data) has no source zoom:</text>
+  <text x="380" y="316" text-anchor="middle" font-size="12" fill="#555">the response is an empty tile.</text>
+</svg>

@@ -114,6 +114,17 @@ a PMTiles archive. It keeps the source tiles it decoded in memory, within the
 budgets given. Raster decoding is injected: `browserDecoder` decodes 8-bit PNG
 in JS and everything else with the browser.
 
+## How it works
+
+Vector tiles are reprojected feature by feature;
+[docs/vector-tiles.md](docs/vector-tiles.md) follows one tile through the
+pipeline, with figures, from the protocol and its worker to the MVT bytes, and
+lists its limitations. Two steps have pages of their own: [choosing the
+source tiles](docs/vector-source-selection.md) and [transforming a source
+tile](docs/vector-transform.md). [docs/polygon-pitfalls.md](docs/polygon-pitfalls.md)
+explains the two ways a reprojected polygon used to come out with stray
+triangles, and the fixes.
+
 ## Example
 
 `example/` is a Vite page with a few CRSs, OpenFreeMap's Liberty style
