@@ -8,8 +8,8 @@ maplibregl.setWorkerUrl(maplibreWorkerUrl)
 
 /** OpenFreeMap's Liberty style; its `openmaptiles` source is the Web Mercator vector source. */
 const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
-/** GSI's standard map, through the TileJSON next to this page (GSI publishes none). */
-const RASTER_SOURCE = 'gsi-std.json'
+/** NASA's Blue Marble from GIBS, through the TileJSON next to this page (GIBS publishes none). */
+const RASTER_SOURCE = 'blue-marble.json'
 
 /** Added to the sources' own credits, which come with their TileJSON. */
 const REPROJECTED =
@@ -17,16 +17,12 @@ const REPROJECTED =
 
 // Places to check the tiles' alignment against.
 const PLACES: [string, number, number][] = [
-  ['Tokyo Station', 139.7671, 35.6812],
-  ['Mt. Fuji', 138.7274, 35.3606],
-  ['Sapporo Station', 141.3508, 43.0687],
   ['Wellington', 174.7762, -41.2865],
   ['Nuuk', -51.7216, 64.1814],
   ['North Pole', 0, 90],
   ['South Pole', 0, -90],
   ['Ottawa', -75.6972, 45.4215],
 ]
-const TOKYO: [number, number] = [139.7671, 35.6812]
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 const form = $<HTMLFormElement>('form')
@@ -121,15 +117,9 @@ async function load(epsg: number) {
     style,
     hash: true,
     attributionControl: { customAttribution: REPROJECTED },
-    ...(inGrid(crs, TOKYO[0], TOKYO[1])
-      ? { center: TOKYO, zoom: 7 }
-      : {
-          center: crs.projection.inverse([origin[0] + extentAtZoom0 / 2, origin[1] - extentAtZoom0 / 2]) as [
-            number,
-            number,
-          ],
-          zoom: 1,
-        }),
+    // The center of the CRS's grid, which shows the whole area of use.
+    center: crs.projection.inverse([origin[0] + extentAtZoom0 / 2, origin[1] - extentAtZoom0 / 2]) as [number, number],
+    zoom: 1,
   })
   map.addControl(new maplibregl.NavigationControl())
   map.showTileBoundaries = bounds.checked
@@ -172,10 +162,10 @@ function rasterStyle(projection: string, epsg: number): maplibregl.StyleSpecific
   return {
     version: 8,
     projection: { type: projection },
-    sources: { gsi: { type: 'raster', url: `${SCHEME}://${epsg}/${RASTER_SOURCE}`, tileSize: 256 } },
+    sources: { imagery: { type: 'raster', url: `${SCHEME}://${epsg}/${RASTER_SOURCE}`, tileSize: 256 } },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': '#fff' } },
-      { id: 'gsi', type: 'raster', source: 'gsi' },
+      { id: 'imagery', type: 'raster', source: 'imagery' },
     ],
   }
 }

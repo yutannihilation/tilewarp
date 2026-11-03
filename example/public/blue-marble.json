@@ -1,0 +1,11 @@
+{
+  "tilejson": "3.0.0",
+  "name": "Blue Marble Shaded Relief and Bathymetry (NASA GIBS)",
+  "tiles": [
+    "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg"
+  ],
+  "minzoom": 0,
+  "maxzoom": 8,
+  "tileSize": 256,
+  "attribution": "Imagery from <a href=\"https://nasa-gibs.github.io/gibs-api-docs/\" target=\"_blank\">NASA's Global Imagery Browse Services (GIBS)</a>, part of NASA's Earth Science Data and Information System (ESDIS)"
+}

@@ -45,7 +45,7 @@ new maplibregl.Map({
   are `tilewarp://…/{z}/{x}/{y}.mvt` for a vector source (one with
   `vector_layers`) or `.png` for a raster one, and it carries the source's
   `attribution`, layers and the zoom beyond which the map overzooms. A source
-  without a TileJSON needs one written for it (see `example/public/gsi-std.json`).
+  without a TileJSON needs one written for it (see `example/public/blue-marble.json`).
 - **Source tiles.** `{z}`, `{x}`, `{y}`, `{-y}` and `scheme: "tms"` are
   understood. 404, 204 and an empty body mean no tile there; gzipped tiles
   are gunzipped even without `Content-Encoding`. Other HTTP errors and failed
@@ -117,8 +117,9 @@ in JS and everything else with the browser.
 ## Example
 
 `example/` is a Vite page with a few CRSs, OpenFreeMap's Liberty style
-(vector) and GSI's standard map (raster), a worker toggle, and per-tile times
-and main-thread stalls for measuring.
+(vector) and NASA's Blue Marble from [GIBS](https://nasa-gibs.github.io/gibs-api-docs/)
+(raster), a worker toggle, and per-tile times and main-thread stalls for
+measuring.
 
 ```sh
 bun install
@@ -126,15 +127,14 @@ bun run build
 bun run dev
 ```
 
-Measured in Chromium 152 on a desktop Mac, production build, 2026-11-03:
+Measured in Chromium 152 on a desktop Mac, production build, 2026-11-03,
+with an earlier version of the example that also offered EPSG:6677:
 
 | Run                                                                                       | Tiles | Median | p90    | Main-thread stalls > 50 ms |
 | ----------------------------------------------------------------------------------------- | ----- | ------ | ------ | -------------------------- |
 | OpenFreeMap, EPSG:6677, Tokyo, zoom 9, three pans and a zoom-out, worker, cold HTTP cache | 27    | 414 ms | 677 ms | none                       |
 | Same, worker, warm HTTP cache                                                             | 25    | 51 ms  | 164 ms | none                       |
 | Same, main thread, warm HTTP cache                                                        | 19    | 40 ms  | 179 ms | 3 (50–159 ms)              |
-| GSI raster, EPSG:6677, Tokyo, zoom 9, worker                                              | 28    | 150 ms | 381 ms | none                       |
-| GSI raster, EPSG:3413, zoom 1, worker                                                     | 16    | 368 ms | 392 ms | none                       |
 
 Per-tile time runs from the request to the answer and includes fetching the
 source tiles. Stalls are delays of a 10 ms interval on the main thread, so
