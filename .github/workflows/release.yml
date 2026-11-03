@@ -47,4 +47,11 @@ jobs:
 
       - run: bun run test
 
-      - run: npm publish
+      - name: Publish
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          # Strip build metadata; a "-" left over marks a prerelease.
+          case "${version%%+*}" in
+            *-*) npm publish --tag next ;;
+            *) npm publish ;;
+          esac
