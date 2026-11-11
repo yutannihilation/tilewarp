@@ -50,6 +50,34 @@ samples can reach into a few more tiles, and those are read too. A field with no
 output tile is entirely outside the data) has no source zoom, and the
 output tile is empty.
 
+### Where the zoom changes
+
+The choice is made per output tile, so two neighbouring output tiles at the
+same zoom can read different source zooms. Where the scale between the CRS
+and Mercator changes across the map, the unrounded zoom changes with it, and
+the tiles on either side of the place where it passes x.5 round to different
+zooms. In a polar stereographic CRS that place is a parallel: Mercator
+stretches more towards the pole, so the unrounded zoom falls steadily. Each
+output zoom adds exactly 1 to it, so the change stays at about the same
+latitude at every zoom, drawn along the edges of the output tiles there.
+
+A source generalized per zoom (OpenMapTiles simplifies coastlines and ice
+differently at each) then shows two versions of the data side by side. Below,
+EPSG:3413 over northern Greenland (82.6°N, 24.6°W) at map zoom 6.16: the
+output tiles above the horizontal break read source zoom 5 and those below
+read zoom 6, the unrounded zoom passing 5.5 between them.
+
+![Northern Greenland in EPSG:3413: a horizontal break in the coastline where the source zoom changes, and thin green lines along source tile boundaries](figures/greenland-3413-zoom-seam.jpg)
+
+Rounding differently (down, or up) moves the break to another latitude; it
+does not remove it. The 16-tile limit is not involved here: these output
+tiles need at most 8 source tiles.
+
+The thin green lines in the same picture are a different effect: the outline
+of a park polygon drawn along source tile boundaries, the first of the
+[known limitations](vector-tiles.md#known-limitations). They are wider apart
+above the break, where the source tiles are twice the size.
+
 ## Coverage, cell by cell
 
 A source tile is big, and most of it is often outside the output tile. The

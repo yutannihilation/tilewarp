@@ -292,7 +292,21 @@ flowchart TD
 ## Known limitations
 
 - Lines and polygon outlines are split at source tile boundaries. Fills are
-  not affected, but strokes, dashes and line labels are.
+  not affected, but strokes, dashes and line labels are. A polygon is cut
+  along the boundary (the pre-clip above), and the cut is an edge of each
+  piece like any other, inside the output tile. A fill layer whose
+  `fill-outline-color` differs from its `fill-color` therefore draws a thin
+  line along every source tile boundary that crosses the polygon, a grid of
+  meridians and parallels over a large one. In OpenFreeMap's Liberty style
+  the `park` layer does (a green outline), which shows over the Northeast
+  Greenland National Park
+  ([picture](vector-source-selection.md#where-the-zoom-changes)). Layers with
+  `fill-antialias: false`, or with no outline color of their own, show
+  nothing.
+- Neighbouring output tiles can read different source zooms, and a source
+  generalized per zoom then shows a visible break along the output tile
+  edges between them
+  ([details](vector-source-selection.md#where-the-zoom-changes)).
 - A ring with any vertex outside the CRS's domain is dropped whole.
 - Edges of a polygon that come within about one output unit of each other
   without touching (a narrow neck, a hole close to its exterior) can cross
