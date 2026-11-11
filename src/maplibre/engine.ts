@@ -10,9 +10,10 @@ import { buildCrs } from '../crs.ts'
 import { browserDecoder } from '../decode.ts'
 import { SourceError } from '../errors.ts'
 import { memoized } from '../memo.ts'
+import type { Resampling } from '../source.ts'
 import { createRasterTiming, createVectorTiming } from '../timing.ts'
 import { vectorMaxZoom } from '../vector.ts'
-import { TILE_SIZE, Warper } from '../warper.ts'
+import { rasterMaxZoom, TILE_SIZE, Warper } from '../warper.ts'
 import type { XyzSource } from '../xyz.ts'
 import { xyzSourceFromTileJson } from '../xyz.ts'
 import type { Call } from './rpc.ts'
@@ -39,14 +40,20 @@ export interface TileRequest {
   x: number
   y: number
   format: TileFormat
+  /** Set by the source URL's `nearest` segment; otherwise the source's own default. */
+  resampling?: Resampling
 }
 
-/** MVT bytes for `mvt`, the drawn tile for `png`; both transferable. */
+/**
+ * MVT bytes for `mvt`, the drawn tile for `png` (no bytes where a source
+ * sampled by nearest neighbor has no data, which MapLibre takes as no tile);
+ * both transferable.
+ */
 export type TileResult = ArrayBuffer | ImageBitmap
 
 export class WarpEngine {
   readonly #crs = new Map<number, Crs>()
-  /** Sources by TileJSON URL; a failed TileJSON is not kept. */
+  /** Sources by TileJSON URL and the resampling asked for; a failed TileJSON is not kept. */
   readonly #sources = new Map<string, Promise<XyzSource>>()
   readonly #warper = new Warper({
     decode: browserDecoder,
@@ -64,11 +71,14 @@ export class WarpEngine {
    * The reprojected TileJSON of the source at `sourceUrl`, whose tiles are
    * `{url}/{z}/{x}/{y}.mvt` for a vector source (one with `vector_layers`)
    * or `.png` for a raster one, with the source's attribution and, for
-   * vector, its layers and the zoom beyond which the map should overzoom.
+   * vector, its layers and the zoom beyond which the map should overzoom;
+   * for a raster-dem source that states it, its `encoding`. A raster source
+   * sampled by nearest neighbor also gets the zoom to overzoom beyond, as
+   * its pixels would be repeated past it.
    */
-  async tileJson(epsg: number, sourceUrl: string, url: string): Promise<object> {
+  async tileJson(epsg: number, sourceUrl: string, url: string, resampling?: Resampling): Promise<object> {
     const crs = this.#crsOf(epsg)
-    const source = await this.#source(sourceUrl)
+    const source = await this.#source(sourceUrl, resampling)
     const common = { tilejson: '3.0.0', minzoom: 0, attribution: source.attribution }
     if (source.vectorLayers !== undefined) {
       return {
@@ -78,7 +88,14 @@ export class WarpEngine {
         maxzoom: vectorMaxZoom(crs, source.maxzoom, MAX_ZOOM),
       }
     }
-    return { ...common, tiles: [`${url}/{z}/{x}/{y}.png`], tileSize: TILE_SIZE, maxzoom: MAX_ZOOM }
+    return {
+      ...common,
+      tiles: [`${url}/{z}/{x}/{y}.png`],
+      tileSize: TILE_SIZE,
+      maxzoom: source.resampling === 'nearest' ? rasterMaxZoom(crs, source, MAX_ZOOM) : MAX_ZOOM,
+      // MapLibre takes the key's presence as the encoding, even when undefined.
+      ...(source.encoding !== undefined && { encoding: source.encoding }),
+    }
   }
 
   /**
@@ -86,10 +103,13 @@ export class WarpEngine {
    *   is not rendered; a render under way runs to the end. Source reads under
    *   way finish and stay cached, as other tiles share them.
    */
-  async tile({ epsg, source: sourceUrl, z, x, y, format }: TileRequest, signal?: AbortSignal): Promise<TileResult> {
+  async tile(
+    { epsg, source: sourceUrl, z, x, y, format, resampling }: TileRequest,
+    signal?: AbortSignal,
+  ): Promise<TileResult> {
     if (z > MAX_ZOOM || x >= 2 ** z || y >= 2 ** z) throw new RangeError(`Tile ${z}/${x}/${y} is out of range`)
     const crs = this.#crsOf(epsg)
-    const source = await this.#source(sourceUrl)
+    const source = await this.#source(sourceUrl, resampling)
     signal?.throwIfAborted()
     if (format === 'mvt') {
       if (source.vectorLayers === undefined) throw new SourceError(`${sourceUrl} is not a vector source`)
@@ -99,6 +119,8 @@ export class WarpEngine {
     }
     if (source.vectorLayers !== undefined) throw new SourceError(`${sourceUrl} is a vector source, not raster`)
     const image = await this.#warper.renderRasterTile(crs, source, z, x, y, createRasterTiming(), signal)
+    // Transparent pixels would be elevations to a raster-dem source.
+    if (image === null && source.resampling === 'nearest') return new ArrayBuffer(0)
     // The sampler allocates its output, never in a SharedArrayBuffer.
     const data = image
       ? new Uint8ClampedArray(image.data.buffer as ArrayBuffer, image.data.byteOffset, image.data.byteLength)
@@ -112,8 +134,8 @@ export class WarpEngine {
     return crs
   }
 
-  #source(url: string): Promise<XyzSource> {
-    return memoized(this.#sources, url, () => xyzSourceFromTileJson(url))
+  #source(url: string, resampling?: Resampling): Promise<XyzSource> {
+    return memoized(this.#sources, `${resampling ?? ''} ${url}`, () => xyzSourceFromTileJson(url, { resampling }))
   }
 }
 
@@ -124,7 +146,7 @@ export function runCall(engine: WarpEngine, call: Call, signal?: AbortSignal): P
       engine.addCrs(call.epsg, call.projjson)
       return undefined
     case 'tileJson':
-      return engine.tileJson(call.epsg, call.source, call.url)
+      return engine.tileJson(call.epsg, call.source, call.url, call.resampling)
     case 'tile':
       return engine.tile(call.request, signal)
   }
