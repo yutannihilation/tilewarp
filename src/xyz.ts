@@ -19,6 +19,11 @@ export interface XyzSourceOptions {
   /** Present for a vector source: its layers, passed on to the reprojected TileJSON. */
   vector_layers?: unknown[]
   attribution?: string
+  /**
+   * Vector only. Join the pieces of a polygon that source tile boundaries
+   * cut, where they have the same feature id. Default false.
+   */
+  merge?: boolean
 }
 
 export class XyzSource implements MercatorSource {
@@ -32,6 +37,7 @@ export class XyzSource implements MercatorSource {
   readonly scheme: 'xyz' | 'tms'
   readonly vectorLayers: unknown[] | undefined
   readonly attribution: string | undefined
+  readonly merge: boolean
 
   constructor(options: XyzSourceOptions) {
     const [template] = options.tiles
@@ -44,6 +50,7 @@ export class XyzSource implements MercatorSource {
     this.id = `${template} ${this.scheme} ${this.tileSize}`
     this.vectorLayers = options.vector_layers
     this.attribution = options.attribution
+    this.merge = options.merge ?? false
   }
 
   /** The tile's URL. */
@@ -83,10 +90,15 @@ export class XyzSource implements MercatorSource {
  * The source a TileJSON describes. Relative tile URLs are resolved against
  * the TileJSON's URL.
  *
+ * @param options - what the TileJSON does not say: whether to merge polygon
+ *   pieces by feature id
  * @throws {UpstreamError} If the TileJSON cannot be fetched.
  * @throws {SourceError} If it is not JSON or has no tile URL.
  */
-export async function xyzSourceFromTileJson(url: string): Promise<XyzSource> {
+export async function xyzSourceFromTileJson(
+  url: string,
+  options: Pick<XyzSourceOptions, 'merge'> = {},
+): Promise<XyzSource> {
   const response = await request(url)
   if (!response.ok) throw new UpstreamError(`HTTP ${response.status} for ${url}`)
   const text = await body(response, url, (r) => r.text())
@@ -97,7 +109,12 @@ export async function xyzSourceFromTileJson(url: string): Promise<XyzSource> {
     throw new SourceError(`${url} is not JSON`, { cause: error })
   }
   if (!Array.isArray(tileJson.tiles)) throw new SourceError(`${url} is not a TileJSON with tiles`)
-  return new XyzSource({ ...tileJson, tiles: tileJson.tiles.map((template) => resolveTemplate(template, url)) })
+  return new XyzSource({
+    ...tileJson,
+    // Not the TileJSON's to say.
+    merge: options.merge,
+    tiles: tileJson.tiles.map((template) => resolveTemplate(template, url)),
+  })
 }
 
 /** `fetch`, with a failed request (network, CORS) as an {@link UpstreamError}. */

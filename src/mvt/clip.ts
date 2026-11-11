@@ -347,7 +347,7 @@ function clipRingsToHalfPlane(rings: Coords[], edge: number, r: Rect): Coords[] 
 }
 
 /** Clipped rings as polygons: each hole goes with the exterior around it. */
-function assemble(rings: Coords[]): Polygon[] {
+export function assemble(rings: Coords[]): Polygon[] {
   const polygons: Polygon[] = []
   const holes: Coords[] = []
   for (const ring of rings) {

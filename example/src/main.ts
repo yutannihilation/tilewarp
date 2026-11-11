@@ -29,6 +29,7 @@ const form = $<HTMLFormElement>('form')
 const preset = $<HTMLSelectElement>('preset')
 const custom = $<HTMLInputElement>('custom')
 const workerBox = $<HTMLInputElement>('worker')
+const mergeBox = $<HTMLInputElement>('merge')
 const bounds = $<HTMLInputElement>('bounds')
 const info = $<HTMLDivElement>('info')
 const statsBox = $<HTMLDivElement>('stats')
@@ -109,7 +110,7 @@ async function load(epsg: number) {
   } catch {}
   maplibregl.addProjection(crs)
 
-  const style = kind === 'vector' ? await vectorStyle(crs.name, epsg) : rasterStyle(crs.name, epsg)
+  const style = kind === 'vector' ? await vectorStyle(crs.name, epsg, mergeBox.checked) : rasterStyle(crs.name, epsg)
 
   const { origin, extentAtZoom0 } = crs.tileMatrixSet
   map = new maplibregl.Map({
@@ -131,7 +132,8 @@ async function load(epsg: number) {
       .addTo(map)
   }
 
-  const header = `${crs.name}  ${kind}, ${workerBox.checked ? 'worker' : 'main thread'}\norigin ${origin.map((v) => v.toFixed(1)).join(', ')}  extentAtZoom0 ${extentAtZoom0.toFixed(1)}`
+  const merging = kind === 'vector' && mergeBox.checked ? ', merge' : ''
+  const header = `${crs.name}  ${kind}${merging}, ${workerBox.checked ? 'worker' : 'main thread'}\norigin ${origin.map((v) => v.toFixed(1)).join(', ')}  extentAtZoom0 ${extentAtZoom0.toFixed(1)}`
   const current = map
   const update = (lngLat?: maplibregl.LngLat) => {
     info.textContent = `${header}\nzoom ${current.getZoom().toFixed(2)}${lngLat ? `  lng/lat ${lngLat.lng.toFixed(5)}, ${lngLat.lat.toFixed(5)}` : ''}`
@@ -146,14 +148,16 @@ async function load(epsg: number) {
  * Liberty with its vector source read through the protocol. Its hillshade is
  * a Web Mercator raster given only as a tile template, which a custom CRS
  * would draw in the wrong place, so it is left out with its layers.
+ *
+ * @param merge - join polygon pieces across source tiles by feature id (the URL's `merge/`)
  */
-async function vectorStyle(projection: string, epsg: number): Promise<maplibregl.StyleSpecification> {
+async function vectorStyle(projection: string, epsg: number, merge: boolean): Promise<maplibregl.StyleSpecification> {
   const style = (await (await fetch(VECTOR_STYLE)).json()) as maplibregl.StyleSpecification
   const vector = style.sources.openmaptiles as maplibregl.VectorSourceSpecification
   return {
     ...style,
     projection: { type: projection },
-    sources: { openmaptiles: { ...vector, url: `${SCHEME}://${epsg}/${vector.url}` } },
+    sources: { openmaptiles: { ...vector, url: `${SCHEME}://${epsg}/${merge ? 'merge/' : ''}${vector.url}` } },
     layers: style.layers.filter((layer) => !('source' in layer) || layer.source === 'openmaptiles'),
   }
 }

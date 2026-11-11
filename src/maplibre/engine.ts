@@ -39,6 +39,8 @@ export interface TileRequest {
   x: number
   y: number
   format: TileFormat
+  /** Set by the source URL's `merge` segment: join polygon pieces by feature id. */
+  merge?: boolean
 }
 
 /** MVT bytes for `mvt`, the drawn tile for `png`; both transferable. */
@@ -46,7 +48,7 @@ export type TileResult = ArrayBuffer | ImageBitmap
 
 export class WarpEngine {
   readonly #crs = new Map<number, Crs>()
-  /** Sources by TileJSON URL; a failed TileJSON is not kept. */
+  /** Sources by TileJSON URL and whether they merge; a failed TileJSON is not kept. */
   readonly #sources = new Map<string, Promise<XyzSource>>()
   readonly #warper = new Warper({
     decode: browserDecoder,
@@ -86,10 +88,13 @@ export class WarpEngine {
    *   is not rendered; a render under way runs to the end. Source reads under
    *   way finish and stay cached, as other tiles share them.
    */
-  async tile({ epsg, source: sourceUrl, z, x, y, format }: TileRequest, signal?: AbortSignal): Promise<TileResult> {
+  async tile(
+    { epsg, source: sourceUrl, z, x, y, format, merge }: TileRequest,
+    signal?: AbortSignal,
+  ): Promise<TileResult> {
     if (z > MAX_ZOOM || x >= 2 ** z || y >= 2 ** z) throw new RangeError(`Tile ${z}/${x}/${y} is out of range`)
     const crs = this.#crsOf(epsg)
-    const source = await this.#source(sourceUrl)
+    const source = await this.#source(sourceUrl, merge)
     signal?.throwIfAborted()
     if (format === 'mvt') {
       if (source.vectorLayers === undefined) throw new SourceError(`${sourceUrl} is not a vector source`)
@@ -112,8 +117,9 @@ export class WarpEngine {
     return crs
   }
 
-  #source(url: string): Promise<XyzSource> {
-    return memoized(this.#sources, url, () => xyzSourceFromTileJson(url))
+  /** Both kinds of a source have the same id, so they share the cached source tiles. */
+  #source(url: string, merge = false): Promise<XyzSource> {
+    return memoized(this.#sources, merge ? `merge ${url}` : url, () => xyzSourceFromTileJson(url, { merge }))
   }
 }
 

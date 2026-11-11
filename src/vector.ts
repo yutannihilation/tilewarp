@@ -21,6 +21,8 @@ import { decodeTile } from './mvt/decode.ts'
 import { encodeTile } from './mvt/encode.ts'
 import type { Bbox, Coords, Feature, Geometry, Layer, Polygon } from './mvt/geometry.ts'
 import { coordinateCount, geometryBbox } from './mvt/geometry.ts'
+import type { Piece } from './mvt/merge.ts'
+import { mergePieces } from './mvt/merge.ts'
 import type { DensifyOptions, PointTransform } from './mvt/transform.ts'
 import { transformLine, transformRing } from './mvt/transform.ts'
 import type { TileSource } from './source.ts'
@@ -88,6 +90,13 @@ const MAX_SOURCE_TILES = 16
 /** Densification: one output unit (half a unit at 4096), 2^8 pieces per segment at most. */
 const DENSIFY_TOLERANCE = 1
 const DENSIFY_MAX_DEPTH = 8
+/**
+ * How far apart two source tiles' copies of a point where a polygon crosses
+ * their boundary may be for the pieces to be joined there, in tile widths:
+ * 2 units at 4096. Each tile cuts its own rounded copy of the polygon;
+ * OpenMapTiles tiles differ by up to 1.5 units.
+ */
+const MERGE_TOLERANCE = 1 / 2048
 
 /** A source tile's features after decoding and pre-clipping, target-independent. */
 export interface SourceTile {
@@ -167,7 +176,7 @@ function clipGeometry(geometry: Geometry, rect: Rect, pointRect: Rect): Geometry
   }
 }
 
-type VectorSource = Pick<TileSource, 'minzoom' | 'maxzoom'>
+type VectorSource = Pick<TileSource, 'minzoom' | 'maxzoom' | 'merge'>
 
 /**
  * Render output tile `z/x/y`: MVT bytes, empty when nothing of the source
@@ -243,6 +252,7 @@ export async function renderVectorTile(
     maxSegment: (2 ** z * OUTPUT_EXTENT) / 2,
     minChord: 0,
   }
+  const merged = source.merge ? mergeAcrossTiles(crs, toTile, choice.z, tiles, densify, output) : undefined
   const layers = new Map<string, Layer>()
   for (const { cover, sx, sy, tile } of tiles) {
     if (tile === null) continue
@@ -263,6 +273,15 @@ export async function renderVectorTile(
       }
       let out = layers.get(layer.name)
       for (const { feature, bbox } of layer.features) {
+        const whole = merged?.get(feature)
+        if (whole !== undefined) {
+          // Merged with its pieces in other tiles: drawn once, where the first is.
+          if (whole !== null) {
+            out ??= { name: layer.name, extent: OUTPUT_EXTENT, features: [] }
+            out.features.push({ ...feature, geometry: whole })
+          }
+          continue
+        }
         if (!overlaps(bbox, wanted)) continue
         // Only what can reach the output tile goes through the projection.
         let visible: Geometry | null
@@ -291,6 +310,170 @@ export async function renderVectorTile(
     timing.bytes = encoded.byteLength
   }
   return encoded
+}
+
+/** A source tile read for an output tile, and the part of it the output tile sees. */
+interface ReadTile {
+  cover: Coverage
+  sx: number
+  sy: number
+  tile: SourceTile | null
+}
+
+/** A polygon feature of one source tile that may be a piece of a larger one. */
+interface Member {
+  feature: Feature
+  bbox: Bbox
+  column: number
+  row: number
+  /** What the output tile sees of all the tiles together, in this tile's units. */
+  seen: Rect
+}
+
+/** Features of several source tiles that may be one: same layer, extent, id and properties. */
+interface Group {
+  extent: number
+  members: Member[]
+  /** Whether the members are from more than one tile. */
+  spans: boolean
+}
+
+/**
+ * The polygons that source tile boundaries cut into pieces, joined again
+ * ({@link mergePieces}) and reprojected: for the first piece of each (in the
+ * order the tiles' features are drawn) the whole polygon's geometry, `null`
+ * when nothing of it is in the output tile, and `null` for its other pieces.
+ * Features that are not in the map are drawn piece by piece: those without
+ * an id, in one tile only, whose pieces do not fit together, or with a
+ * vertex outside the CRS's domain once joined.
+ *
+ * Pieces are the features of the same layer, id and properties. They are
+ * put in one frame, the first tile's units continued over its neighbours
+ * (columns in the copy of the world nearest to it, so across the
+ * antimeridian too), and clipped to one rectangle, the bounds of what the
+ * output tile sees of all the tiles: clipped each to its own tile's part,
+ * two pieces would end at different places along the boundary they share.
+ * The joined polygon is in several tiles, so it takes the first tile's
+ * checked transform and full densification, not a tile's shortcuts
+ * ({@link tileTransform}).
+ */
+function mergeAcrossTiles(
+  crs: Crs,
+  toTile: Affine,
+  sz: number,
+  tiles: ReadTile[],
+  densify: DensifyOptions,
+  output: Rect,
+): Map<Feature, Geometry | null> {
+  const merged = new Map<Feature, Geometry | null>()
+  const read = tiles.filter((t) => t.tile !== null)
+  if (read.length < 2) return merged
+  const n = 2 ** sz
+  const { sx: sx0, sy: sy0 } = read[0]
+  const placed = read.map((t) => {
+    const column = mod(t.sx - sx0, n)
+    return { ...t, column: column > n / 2 ? column - n : column, row: t.sy - sy0 }
+  })
+  const places = new Set(placed.map((t) => `${t.column},${t.row}`))
+  const wasRead = (column: number, row: number) => places.has(`${column},${row}`)
+  // What the output tile sees of all the tiles, in tile widths.
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const { cover, column, row } of placed) {
+    minX = Math.min(minX, column + cover.minX)
+    minY = Math.min(minY, row + cover.minY)
+    maxX = Math.max(maxX, column + cover.maxX)
+    maxY = Math.max(maxY, row + cover.maxY)
+  }
+
+  const groups = new Map<string, Group[]>()
+  for (const { tile, column, row } of placed) {
+    for (const layer of (tile as SourceTile).layers) {
+      const e = layer.extent
+      const seen: Rect = {
+        minX: (minX - column) * e,
+        minY: (minY - row) * e,
+        maxX: (maxX - column) * e,
+        maxY: (maxY - row) * e,
+      }
+      for (const { feature, bbox } of layer.features) {
+        if (feature.id === undefined || feature.geometry.type !== 3 || !overlaps(bbox, seen)) continue
+        const key = `${e} ${feature.id} ${layer.name}`
+        let sameKey = groups.get(key)
+        if (sameKey === undefined) {
+          sameKey = []
+          groups.set(key, sameKey)
+        }
+        const member: Member = { feature, bbox, column, row, seen }
+        const group = sameKey.find((g) => sameProperties(g.members[0].feature, feature))
+        if (group === undefined) {
+          sameKey.push({ extent: e, members: [member], spans: false })
+        } else {
+          const first = group.members[0]
+          if (first.column !== column || first.row !== row) group.spans = true
+          group.members.push(member)
+        }
+      }
+    }
+  }
+
+  // By layer extent (normally one, 4096, for every layer).
+  const transforms = new Map<number, TileTransform>()
+  for (const sameKey of groups.values()) {
+    for (const { extent, members, spans } of sameKey) {
+      if (!spans) continue
+      const pieces: Piece[] = []
+      for (const { feature, bbox, column, row, seen } of members) {
+        if (feature.geometry.type !== 3) continue
+        const { polygons } = feature.geometry
+        const visible = contains(seen, bbox) ? polygons : polygons.flatMap((polygon) => clipPolygon(polygon, seen))
+        if (visible.length === 0) continue
+        pieces.push({ column, row, polygons: translated(visible, column * extent, row * extent) })
+      }
+      const polygons = mergePieces(pieces, extent, wasRead, extent * MERGE_TOLERANCE)
+      if (polygons === null) continue
+      let transform = transforms.get(extent)
+      if (transform === undefined) {
+        transform = { f: composeTransform(crs.from3857Checked, toTile, sz, sx0, sy0, extent), densify }
+        transforms.set(extent, transform)
+      }
+      // Touches become shared vertices, as in each piece before.
+      const lost = { rings: 0 }
+      const geometry = reproject({ type: 3, polygons: polygons.map(insertTouches) }, transform, output, lost)
+      // A ring with a vertex outside the domain is dropped whole, and joined
+      // it is the whole polygon: in pieces, only those at the domain's edge go.
+      if (lost.rings > 0) continue
+      for (const { feature } of members) merged.set(feature, null)
+      merged.set(members[0].feature, geometry)
+    }
+  }
+  return merged
+}
+
+function sameProperties(a: Feature, b: Feature): boolean {
+  let count = 0
+  for (const key in a.properties) {
+    if (a.properties[key] !== b.properties[key]) return false
+    count++
+  }
+  for (const _ in b.properties) count--
+  return count === 0
+}
+
+/** The polygons moved by `dx, dy`; themselves when that is nowhere. */
+function translated(polygons: Polygon[], dx: number, dy: number): Polygon[] {
+  if (dx === 0 && dy === 0) return polygons
+  const move = (ring: Coords) => {
+    const out = new Array<number>(ring.length)
+    for (let i = 0; i < ring.length; i += 2) {
+      out[i] = ring[i] + dx
+      out[i + 1] = ring[i + 1] + dy
+    }
+    return out
+  }
+  return polygons.map(({ exterior, holes }) => ({ exterior: move(exterior), holes: holes.map(move) }))
 }
 
 function overlaps(box: Bbox, r: Rect): boolean {
@@ -440,8 +623,17 @@ function diagonal({ xs, ys }: GridImages): number {
   )
 }
 
-/** Transform, clip to the buffered output tile, quantize; `null` when nothing is left. */
-function reproject(geometry: Geometry, { f, densify }: TileTransform, output: Rect): Geometry | null {
+/**
+ * Transform, clip to the buffered output tile, quantize; `null` when nothing is left.
+ *
+ * @param lost - counts the polygon rings dropped for a vertex outside the CRS's domain
+ */
+function reproject(
+  geometry: Geometry,
+  { f, densify }: TileTransform,
+  output: Rect,
+  lost?: { rings: number },
+): Geometry | null {
   switch (geometry.type) {
     case 1: {
       const points: Coords = []
@@ -466,13 +658,17 @@ function reproject(geometry: Geometry, { f, densify }: TileTransform, output: Re
       const polygons: Polygon[] = []
       for (const polygon of geometry.polygons) {
         const exterior = transformRing(polygon.exterior, f, densify)
-        if (exterior === null) continue
+        if (exterior === null) {
+          if (lost) lost.rings++
+          continue
+        }
         const clippedExterior = clipRing(exterior, output)
         if (clippedExterior.length === 0) continue
         const transformedHoles: Coords[] = []
         for (const hole of polygon.holes) {
           const tr = transformRing(hole, f, densify)
           if (tr !== null) transformedHoles.push(tr)
+          else if (lost) lost.rings++
         }
         const holes: Coords[] = []
         for (const tr of transformedHoles) {

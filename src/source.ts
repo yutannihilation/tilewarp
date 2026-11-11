@@ -8,6 +8,12 @@ export interface TileSource {
   maxzoom: number
   /** Width and height of every source tile in pixels. */
   tileSize: number
+  /**
+   * Vector only. Join the pieces of a polygon that source tile boundaries
+   * cut, where the pieces have the same feature id, so that a fill's outline
+   * is not drawn along the boundaries. Default false.
+   */
+  merge?: boolean
 }
 
 /**
