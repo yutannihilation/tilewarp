@@ -183,6 +183,56 @@ source's integer coordinates the test is exact.
 shows both problems on real tiles, with figures, and what they looked like on
 the map.
 
+#### Joining the pieces again (`merge`)
+
+The pre-clip leaves a polygon that spans several source tiles as one piece
+per tile, each with an edge along the boundary where the polygon goes on in
+the neighbour. Fills do not show it, but a fill layer with an outline color
+of its own draws those edges, a grid over a large polygon. A source with
+`merge` set (`tilewarp://{epsg}/merge/…` for the protocol) joins the pieces
+again before the transform (`mergeAcrossTiles`, `mergePieces`). It is off by
+default.
+
+- **Which pieces.** Polygon features of the same layer, feature id and
+  properties, found in two or more of the source tiles the output tile
+  reads. Features without an id, lines and points are left as they are.
+- **One frame.** The pieces are put in one tile's units, continued over the
+  other tiles (across the antimeridian too), and clipped to one rectangle,
+  the bounds of everything the output tile sees. Clipped each to its own
+  tile's coverage, two pieces could end at different places along the
+  boundary they share. Where the tiles read go all the way around the
+  world, the frame starts at the antimeridian, and a polygon is not joined
+  across it.
+- **Dropping the cuts.** An edge lying on the boundary between two tiles
+  that were both read is dropped. What is left of each ring is chains that
+  start and end on a boundary.
+- **Joining.** The end of each chain is joined to the start of the one chain
+  from another tile that begins within 2 units (of 4096) of it. The two
+  tiles cut the same edge of the polygon, but each from its own rounded
+  copy, so the two points differ a little (by up to 1.5 units in
+  OpenFreeMap's tiles); the end's point is kept.
+- **Or not at all.** If an end has no such start, or several, the feature
+  is left in pieces, as without `merge`. That happens where the neighbouring
+  tile has the polygon under another id or not at all (in OpenFreeMap's
+  zoom 4 tiles the Northeast Greenland National Park has one id in one tile
+  and another next door), where an edge of the polygon itself runs along a
+  tile boundary, and where a part is thinner than the tolerance. A feature
+  is also left in pieces when, once joined and clipped to what the output
+  tile sees of its pieces' tiles, one of its rings has a vertex outside the
+  CRS's domain: such a ring is dropped whole, which in pieces costs only the
+  pieces at the domain's edge.
+- **How exact.** A join moves a point by up to the tolerance. Where a part
+  of a polygon is no wider than that at a boundary, its shape can change by
+  as much (a quarter of a pixel at most).
+
+The joined polygon comes out as one feature, where the first of its pieces
+would have been, and is in several source tiles, so it does not take one
+tile's shortcuts below: it is transformed with the frame's checked
+transform and full densification. In the 37 tiles measured the transform
+took about 1 to 3 times as long (median 1.6): most in tiles that hold
+little besides large polygons, hardly more in dense ones, and about 30%
+more in total.
+
 ### 4. The transform
 
 Each source tile gets one transform from its own units to output tile units:
@@ -288,11 +338,16 @@ flowchart TD
 | `src/vector.ts`                               | the pipeline: coverage, transform choice, reproject, merge                     |
 | `src/mvt/decode.ts`, `encode.ts`              | MVT in and out                                                                 |
 | `src/mvt/clip.ts`, `transform.ts`, `clean.ts` | clipping, densification, touches, quantization and winding                     |
+| `src/mvt/merge.ts`                            | joining a polygon's pieces across source tiles (`merge`)                       |
 
 ## Known limitations
 
 - Lines and polygon outlines are split at source tile boundaries. Fills are
-  not affected, but strokes, dashes and line labels are.
+  not affected, but strokes, dashes and line labels are, and a fill layer
+  with an outline color of its own draws a thin line along each boundary
+  that crosses a polygon. For polygons with feature ids,
+  [`merge`](#joining-the-pieces-again-merge) joins the pieces again, where
+  the ids agree across tiles; lines stay split.
 - A ring with any vertex outside the CRS's domain is dropped whole.
 - Edges of a polygon that come within about one output unit of each other
   without touching (a narrow neck, a hole close to its exterior) can cross

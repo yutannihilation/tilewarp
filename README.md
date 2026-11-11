@@ -46,6 +46,21 @@ new maplibregl.Map({
   `vector_layers`) or `.png` for a raster one, and it carries the source's
   `attribution`, layers and the zoom beyond which the map overzooms. A source
   without a TileJSON needs one written for it (see `example/public/blue-marble.json`).
+- **Merging polygons.** A polygon that spans several source tiles arrives as
+  one piece per tile, and a fill layer with its own `fill-outline-color`
+  draws the cuts between them. With `merge/` before the TileJSON URL, the
+  pieces with the same feature id are joined again:
+
+  ```ts
+  openmaptiles: { type: 'vector', url: 'tilewarp://6677/merge/https://tiles.openfreemap.org/planet' }
+  ```
+
+  It is off by default. In the tiles measured the transform took about 1 to
+  3 times as long (median 1.6), most where a tile holds little besides large
+  polygons. It needs feature ids that agree across tiles; a polygon
+  whose pieces do not fit together is left as it is, and so are lines. A
+  relative TileJSON URL that itself starts with `merge/` is written
+  `./merge/…`. See [how it works](docs/vector-tiles.md#joining-the-pieces-again-merge).
 - **Source tiles.** `{z}`, `{x}`, `{y}`, `{-y}` and `scheme: "tms"` are
   understood. 404, 204 and an empty body mean no tile there; gzipped tiles
   are gunzipped even without `Content-Encoding`. Other HTTP errors and failed
@@ -111,7 +126,9 @@ const mvt = await warper.renderVectorTile(crs, source, 3, 4, 3, createVectorTimi
 `Warper` reads any `MercatorSource` (`id`, `minzoom`, `maxzoom`, `tileSize`
 and `tile(z, x, y)`): `XyzSource` for HTTPS, or your own, such as a reader for
 a PMTiles archive. It keeps the source tiles it decoded in memory, within the
-budgets given. Raster decoding is injected: `browserDecoder` decodes 8-bit PNG
+budgets given. A vector source with `merge: true`
+(`xyzSourceFromTileJson(url, { merge: true })`) has its polygons' pieces
+joined across source tiles by feature id. Raster decoding is injected: `browserDecoder` decodes 8-bit PNG
 in JS and everything else with the browser.
 
 ## How it works
@@ -158,7 +175,8 @@ Bundle sizes, minified and gzipped: `@yutannihilation/tilewarp` 194 kB / 64 kB,
 ## Known limitations
 
 - Lines and polygon outlines are split at source tile boundaries; fills are
-  not affected.
+  not affected. `merge` joins polygons again where their feature ids agree
+  across tiles.
 - A tile is warped from scratch whenever MapLibre asks for it; only the source
   tiles are cached.
 - The custom CRS API of MapLibre GL JS is experimental and may change in a

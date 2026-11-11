@@ -16,6 +16,11 @@
  * tiles are `{source URL}/{z}/{x}/{y}.mvt` (a vector source, one with
  * `vector_layers`) or `.png` (a raster source). The TileJSON URL may be
  * relative to the page.
+ *
+ * `tilewarp://{epsg}/merge/{TileJSON URL}` joins the pieces of a polygon
+ * that source tile boundaries cut, where they have the same feature id, so
+ * that a fill's outline is not drawn along the boundaries. It does nothing
+ * for a raster source.
  */
 
 import { parseWkt } from '@developmentseed/proj'
@@ -30,8 +35,9 @@ import type { Call, Request, Response } from './rpc.ts'
 /** The URL scheme to register the protocol under, as in the URLs it reads. */
 export const SCHEME = 'tilewarp'
 
-const TILEJSON_URL = /^tilewarp:\/\/(\d+)\/(.+)$/
-const TILE_URL = /^tilewarp:\/\/(\d+)\/(.+)\/(\d+)\/(\d+)\/(\d+)\.(mvt|png)$/
+// The optional `merge/` before the TileJSON URL asks for polygon pieces to be joined.
+const TILEJSON_URL = /^tilewarp:\/\/(\d+)\/(merge\/)?(.+)$/
+const TILE_URL = /^tilewarp:\/\/(\d+)\/(merge\/)?(.+)\/(\d+)\/(\d+)\/(\d+)\.(mvt|png)$/
 
 export interface WarpProtocolOptions {
   /**
@@ -90,7 +96,7 @@ export class WarpProtocol {
       const match = TILEJSON_URL.exec(params.url)
       if (match === null) throw new Error(`Not a ${SCHEME} source URL: ${params.url}`)
       const epsg = this.#checkAdded(match[1])
-      const source = resolveUrl(match[2])
+      const source = resolveUrl(match[3])
       const data = await this.#backend.call({ method: 'tileJson', epsg, source, url: params.url }, signal)
       return { data: data as object }
     }
@@ -98,11 +104,12 @@ export class WarpProtocol {
     if (match === null) throw new Error(`Not a ${SCHEME} tile URL ({z}/{x}/{y}.mvt or .png): ${params.url}`)
     const request = {
       epsg: this.#checkAdded(match[1]),
-      source: resolveUrl(match[2]),
-      z: Number(match[3]),
-      x: Number(match[4]),
-      y: Number(match[5]),
-      format: match[6] as TileFormat,
+      merge: match[2] !== undefined,
+      source: resolveUrl(match[3]),
+      z: Number(match[4]),
+      x: Number(match[5]),
+      y: Number(match[6]),
+      format: match[7] as TileFormat,
     }
     const data = await this.#backend.call({ method: 'tile', request }, signal)
     return { data: data as ArrayBuffer | ImageBitmap }
