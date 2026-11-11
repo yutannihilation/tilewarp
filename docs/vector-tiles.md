@@ -196,11 +196,13 @@ default.
 - **Which pieces.** Polygon features of the same layer, feature id and
   properties, found in two or more of the source tiles the output tile
   reads. Features without an id, lines and points are left as they are.
-- **One frame.** The pieces are put in the first tile's units, continued
-  over its neighbours (across the antimeridian too), and clipped to one
-  rectangle, the bounds of everything the output tile sees. Clipped each to
-  its own tile's coverage, two pieces could end at different places along
-  the boundary they share.
+- **One frame.** The pieces are put in one tile's units, continued over the
+  other tiles (across the antimeridian too), and clipped to one rectangle,
+  the bounds of everything the output tile sees. Clipped each to its own
+  tile's coverage, two pieces could end at different places along the
+  boundary they share. Where the tiles read go all the way around the
+  world, the frame starts at the antimeridian, and a polygon is not joined
+  across it.
 - **Dropping the cuts.** An edge lying on the boundary between two tiles
   that were both read is dropped. What is left of each ring is chains that
   start and end on a boundary.
@@ -215,16 +217,17 @@ default.
   zoom 4 tiles the Northeast Greenland National Park has one id in one tile
   and another next door), where an edge of the polygon itself runs along a
   tile boundary, and where a part is thinner than the tolerance. A feature
-  is also left in pieces when, once joined, one of its rings has a vertex
-  outside the CRS's domain: such a ring is dropped whole, which in pieces
-  costs only the pieces at the domain's edge.
+  is also left in pieces when, once joined and clipped to what the output
+  tile sees of its pieces' tiles, one of its rings has a vertex outside the
+  CRS's domain: such a ring is dropped whole, which in pieces costs only the
+  pieces at the domain's edge.
 - **How exact.** A join moves a point by up to the tolerance. Where a part
   of a polygon is no wider than that at a boundary, its shape can change by
   as much (a quarter of a pixel at most).
 
 The joined polygon comes out as one feature, where the first of its pieces
 would have been, and is in several source tiles, so it does not take one
-tile's shortcuts below: it is transformed with the first tile's checked
+tile's shortcuts below: it is transformed with the frame's checked
 transform and full densification. In the 37 tiles measured the transform
 took about 1 to 3 times as long (median 1.6): most in tiles that hold
 little besides large polygons, hardly more in dense ones, and about 30%

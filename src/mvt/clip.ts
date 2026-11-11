@@ -349,24 +349,32 @@ function clipRingsToHalfPlane(rings: Coords[], edge: number, r: Rect): Coords[] 
 /** Clipped rings as polygons: each hole goes with the exterior around it. */
 export function assemble(rings: Coords[]): Polygon[] {
   const polygons: Polygon[] = []
+  const areas: number[] = []
   const holes: Coords[] = []
   for (const ring of rings) {
-    if (signedArea2(ring) > 0) polygons.push({ exterior: ring, holes: [] })
-    else holes.push(ring)
+    const area = signedArea2(ring)
+    if (area > 0) {
+      polygons.push({ exterior: ring, holes: [] })
+      areas.push(area)
+    } else {
+      holes.push(ring)
+    }
   }
   if (polygons.length === 1) {
     polygons[0].holes = holes
     return polygons
   }
   const boxes = polygons.map((p) => bbox(p.exterior))
+  // An exterior may lie in another's hole, and a hole belongs to the
+  // smallest exterior around it: the first found, from the smallest up.
+  const bySize = polygons.map((_, k) => k).sort((a, b) => areas[a] - areas[b])
   for (const hole of holes) {
-    // Exteriors do not overlap, so at most one contains the hole.
     const [hx0, hy0, hx1, hy1] = bbox(hole)
-    const owner = polygons.findIndex((p, k) => {
+    const owner = bySize.find((k) => {
       const b = boxes[k]
-      return hx0 >= b[0] && hx1 <= b[2] && hy0 >= b[1] && hy1 <= b[3] && ringContains(p.exterior, hole)
+      return hx0 >= b[0] && hx1 <= b[2] && hy0 >= b[1] && hy1 <= b[3] && ringContains(polygons[k].exterior, hole)
     })
-    if (owner >= 0) polygons[owner].holes.push(hole)
+    if (owner !== undefined) polygons[owner].holes.push(hole)
   }
   return polygons
 }

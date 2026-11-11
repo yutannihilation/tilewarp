@@ -324,6 +324,7 @@ interface ReadTile {
 interface Member {
   feature: Feature
   bbox: Bbox
+  polygons: Polygon[]
   column: number
   row: number
   /** What the output tile sees of all the tiles together, in this tile's units. */
@@ -336,6 +337,8 @@ interface Group {
   members: Member[]
   /** Whether the members are from more than one tile. */
   spans: boolean
+  /** The bounds of what the output tile sees of the members' tiles, in tile widths of the common frame. */
+  box: Rect
 }
 
 /**
@@ -344,18 +347,21 @@ interface Group {
  * order the tiles' features are drawn) the whole polygon's geometry, `null`
  * when nothing of it is in the output tile, and `null` for its other pieces.
  * Features that are not in the map are drawn piece by piece: those without
- * an id, in one tile only, whose pieces do not fit together, or with a
- * vertex outside the CRS's domain once joined.
+ * an id, in one tile only, whose pieces do not fit together, with a vertex
+ * outside the CRS's domain once joined, or with no piece near what the
+ * output tile sees (of those nothing is drawn either way).
  *
  * Pieces are the features of the same layer, id and properties. They are
- * put in one frame, the first tile's units continued over its neighbours
- * (columns in the copy of the world nearest to it, so across the
- * antimeridian too), and clipped to one rectangle, the bounds of what the
- * output tile sees of all the tiles: clipped each to its own tile's part,
- * two pieces would end at different places along the boundary they share.
- * The joined polygon is in several tiles, so it takes the first tile's
- * checked transform and full densification, not a tile's shortcuts
- * ({@link tileTransform}).
+ * put in one frame, the units of one tile continued over the others (the
+ * tile is chosen by {@link firstColumn}, so that tiles on both sides of the
+ * antimeridian are side by side, whatever order they were read in), and
+ * clipped to one rectangle, the bounds of what the output tile sees of all
+ * the tiles: clipped each to its own tile's part, two pieces would end at
+ * different places along the boundary they share. Once joined, the polygon
+ * is clipped to what the output tile sees of its own pieces' tiles, so that
+ * a part no piece would have drawn cannot fail the whole. It is in several
+ * tiles, so it takes the frame's checked transform and full densification,
+ * not a tile's shortcuts ({@link tileTransform}).
  */
 function mergeAcrossTiles(
   crs: Crs,
@@ -366,38 +372,31 @@ function mergeAcrossTiles(
   output: Rect,
 ): Map<Feature, Geometry | null> {
   const merged = new Map<Feature, Geometry | null>()
-  const read = tiles.filter((t) => t.tile !== null)
+  const read = tiles.filter((t): t is ReadTile & { tile: SourceTile } => t.tile !== null)
   if (read.length < 2) return merged
   const n = 2 ** sz
-  const { sx: sx0, sy: sy0 } = read[0]
-  const placed = read.map((t) => {
-    const column = mod(t.sx - sx0, n)
-    return { ...t, column: column > n / 2 ? column - n : column, row: t.sy - sy0 }
+  const sx0 = firstColumn(
+    read.map((t) => t.sx),
+    n,
+  )
+  const sy0 = Math.min(...read.map((t) => t.sy))
+  const placed = read.map(({ tile, cover, sx, sy }) => {
+    const column = mod(sx - sx0, n)
+    const row = sy - sy0
+    // What the output tile sees of the tile, in tile widths of the frame.
+    return { tile, column, row, own: scaled(cover, 1, column, row) }
   })
   const places = new Set(placed.map((t) => `${t.column},${t.row}`))
   const wasRead = (column: number, row: number) => places.has(`${column},${row}`)
   // What the output tile sees of all the tiles, in tile widths.
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-  for (const { cover, column, row } of placed) {
-    minX = Math.min(minX, column + cover.minX)
-    minY = Math.min(minY, row + cover.minY)
-    maxX = Math.max(maxX, column + cover.maxX)
-    maxY = Math.max(maxY, row + cover.maxY)
-  }
+  const all: Rect = { ...placed[0].own }
+  for (const { own } of placed) extend(all, own)
 
   const groups = new Map<string, Group[]>()
-  for (const { tile, column, row } of placed) {
-    for (const layer of (tile as SourceTile).layers) {
+  for (const { tile, column, row, own } of placed) {
+    for (const layer of tile.layers) {
       const e = layer.extent
-      const seen: Rect = {
-        minX: (minX - column) * e,
-        minY: (minY - row) * e,
-        maxX: (maxX - column) * e,
-        maxY: (maxY - row) * e,
-      }
+      const seen = scaled(all, e, -column, -row)
       for (const { feature, bbox } of layer.features) {
         if (feature.id === undefined || feature.geometry.type !== 3 || !overlaps(bbox, seen)) continue
         const key = `${e} ${feature.id} ${layer.name}`
@@ -406,13 +405,14 @@ function mergeAcrossTiles(
           sameKey = []
           groups.set(key, sameKey)
         }
-        const member: Member = { feature, bbox, column, row, seen }
+        const member: Member = { feature, bbox, polygons: feature.geometry.polygons, column, row, seen }
         const group = sameKey.find((g) => sameProperties(g.members[0].feature, feature))
         if (group === undefined) {
-          sameKey.push({ extent: e, members: [member], spans: false })
+          sameKey.push({ extent: e, members: [member], spans: false, box: { ...own } })
         } else {
           const first = group.members[0]
           if (first.column !== column || first.row !== row) group.spans = true
+          extend(group.box, own)
           group.members.push(member)
         }
       }
@@ -422,18 +422,33 @@ function mergeAcrossTiles(
   // By layer extent (normally one, 4096, for every layer).
   const transforms = new Map<number, TileTransform>()
   for (const sameKey of groups.values()) {
-    for (const { extent, members, spans } of sameKey) {
+    for (const { extent, members, spans, box } of sameKey) {
       if (!spans) continue
+      // Whether the output tile sees less of the pieces' own tiles than of all.
+      const tight = box.minX > all.minX || box.minY > all.minY || box.maxX < all.maxX || box.maxY < all.maxY
+      if (tight) {
+        // No piece comes near what is seen (a join moves a point by the
+        // tolerance at most): nothing would be left, as of each piece alone.
+        const near: Rect = {
+          minX: box.minX - MERGE_TOLERANCE,
+          minY: box.minY - MERGE_TOLERANCE,
+          maxX: box.maxX + MERGE_TOLERANCE,
+          maxY: box.maxY + MERGE_TOLERANCE,
+        }
+        if (!members.some((m) => overlaps(m.bbox, scaled(near, extent, -m.column, -m.row)))) continue
+      }
       const pieces: Piece[] = []
-      for (const { feature, bbox, column, row, seen } of members) {
-        if (feature.geometry.type !== 3) continue
-        const { polygons } = feature.geometry
+      for (const { bbox, polygons, column, row, seen } of members) {
         const visible = contains(seen, bbox) ? polygons : polygons.flatMap((polygon) => clipPolygon(polygon, seen))
         if (visible.length === 0) continue
         pieces.push({ column, row, polygons: translated(visible, column * extent, row * extent) })
       }
-      const polygons = mergePieces(pieces, extent, wasRead, extent * MERGE_TOLERANCE)
-      if (polygons === null) continue
+      const joined = mergePieces(pieces, extent, wasRead, extent * MERGE_TOLERANCE)
+      if (joined === null) continue
+      // Only what the output tile sees of the pieces' own tiles: beyond that
+      // no piece would be drawn, and a vertex there must not fail the whole.
+      const within = scaled(box, extent)
+      const polygons = tight ? joined.flatMap((polygon) => clipPolygon(polygon, within)) : joined
       let transform = transforms.get(extent)
       if (transform === undefined) {
         transform = { f: composeTransform(crs.from3857Checked, toTile, sz, sx0, sy0, extent), densify }
@@ -450,6 +465,40 @@ function mergeAcrossTiles(
     }
   }
   return merged
+}
+
+/**
+ * The column to count the others from, eastwards around the world: the one
+ * after the widest run of columns that were not read (the westernmost when
+ * all were). The columns read are then side by side, and the same ones give
+ * the same frame in whatever order they were read.
+ */
+function firstColumn(columns: number[], n: number): number {
+  const sorted = [...new Set(columns)].sort((a, b) => a - b)
+  let first = sorted[0]
+  let widest = 0
+  for (let i = 0; i < sorted.length; i++) {
+    const before = sorted[i === 0 ? sorted.length - 1 : i - 1]
+    const gap = mod(sorted[i] - before - 1, n)
+    if (gap > widest) {
+      widest = gap
+      first = sorted[i]
+    }
+  }
+  return first
+}
+
+/** The rectangle moved by `dx, dy` and then scaled by `k`. */
+function scaled(r: Rect, k: number, dx = 0, dy = 0): Rect {
+  return { minX: (r.minX + dx) * k, minY: (r.minY + dy) * k, maxX: (r.maxX + dx) * k, maxY: (r.maxY + dy) * k }
+}
+
+/** Widens `box` to hold `r` too. */
+function extend(box: Rect, r: Rect): void {
+  box.minX = Math.min(box.minX, r.minX)
+  box.minY = Math.min(box.minY, r.minY)
+  box.maxX = Math.max(box.maxX, r.maxX)
+  box.maxY = Math.max(box.maxY, r.maxY)
 }
 
 function sameProperties(a: Feature, b: Feature): boolean {
