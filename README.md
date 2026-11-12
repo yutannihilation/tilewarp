@@ -192,7 +192,11 @@ Bundle sizes, minified and gzipped: `@yutannihilation/tilewarp` 194 kB / 64 kB,
 ## Known limitations
 
 - Lines and polygon outlines are split at source tile boundaries; fills are
-  not affected.
+  not affected, but a fill layer with its own `fill-outline-color` draws a
+  thin line along each boundary crossing a polygon.
+- Neighbouring output tiles can read different source zooms, which shows as a
+  break in a source generalized per zoom
+  ([details](docs/vector-source-selection.md#where-the-zoom-changes)).
 - A tile is warped from scratch whenever MapLibre asks for it; only the source
   tiles are cached.
 - The custom CRS API of MapLibre GL JS is experimental and may change in a
