@@ -65,13 +65,13 @@ new maplibregl.Map({
     nearest in size to the source's at its own `maxzoom` (by the grid's
     median scale), so the map overzooms beyond it rather than receive tiles
     of repeated pixels.
-  - Where the source has no tile, a pixel takes the value of the nearest
-    pixel that has one, and past Web Mercator's latitude limit (85.05°) that
-    of the limit at the same longitude, since transparent black would decode
-    as the encoding's lowest elevation. A tile with no data at all is
-    answered with no image, which MapLibre takes as no tile. Pixels outside
-    the CRS's own domain (around a world projection's outline) stay
-    transparent.
+  - Past Web Mercator's latitude limit (85.05°) a pixel takes the value of
+    the limit at the same longitude, since transparent black would decode as
+    the encoding's lowest elevation. Nothing else is filled in: where the
+    source has no tile, and outside the CRS's own domain (around a world
+    projection's outline), pixels stay transparent, so a hole in the source
+    shows as a pit. A tile for which the source has no tile at all is
+    answered with no image, which MapLibre takes as no tile.
   - The source zoom is still the one nearest to the output's resolution, so
     a source pixel is between 0.71 and 1.41 output pixels wide: up to half
     the source pixels are skipped, or some are repeated.
@@ -142,11 +142,11 @@ and `tile(z, x, y)`): `XyzSource` for HTTPS, or your own, such as a reader for
 a PMTiles archive. It keeps the source tiles it decoded in memory, within the
 budgets given. A source with `resampling: 'nearest'` is sampled by nearest
 neighbor instead of bilinearly (`xyzSourceFromTileJson(url, { resampling:
-'nearest' })`; the default for a TileJSON with `encoding`), its pixels
-without data are filled from the nearest one with (see DEM sources), and `renderRasterTile`
-answers `null` for a tile without any. `rasterMaxZoom` gives the output zoom
-past which such a source would repeat its pixels. Raster decoding is injected: `browserDecoder` decodes 8-bit PNG
-in JS and everything else with the browser.
+'nearest' })`; the default for a TileJSON with `encoding`), and
+`renderRasterTile` answers `null` for a tile the source has no tiles for (see
+DEM sources). `rasterMaxZoom` gives the output zoom past which such a source
+would repeat its pixels. Raster decoding is injected: `browserDecoder` decodes
+8-bit PNG in JS and everything else with the browser.
 
 ## How it works
 

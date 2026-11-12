@@ -46,7 +46,7 @@ export interface TileRequest {
 
 /**
  * MVT bytes for `mvt`, the drawn tile for `png` (no bytes where a source
- * sampled by nearest neighbor has no data, which MapLibre takes as no tile);
+ * sampled by nearest neighbor has no tile, which MapLibre takes as no tile);
  * both transferable.
  */
 export type TileResult = ArrayBuffer | ImageBitmap

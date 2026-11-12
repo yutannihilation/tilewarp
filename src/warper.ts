@@ -16,7 +16,7 @@ import type { RasterTiming, VectorTiming } from './timing.ts'
 import { tileAffine } from './tms.ts'
 import type { SourceTile } from './vector.ts'
 import { prepareSourceTile, renderVectorTile, tileZeroMeters } from './vector.ts'
-import { chooseSourceZoom, fillTransparent, mercatorField, sampleField, tileFromKey } from './warp.ts'
+import { chooseSourceZoom, mercatorField, sampleField, tileFromKey } from './warp.ts'
 
 /** Width and height of a raster output tile in pixels. */
 export const TILE_SIZE = 256
@@ -62,10 +62,9 @@ export class Warper {
    * @returns `null` when no pixel of the tile is in Web Mercator, or when the
    *   tile is too coarse for the source (it would read too many tiles even at
    *   the source's `minzoom`). For a `nearest` source, also when the source
-   *   has no data in the tile; where it has some, the pixels without take
-   *   the value of the nearest pixel with ({@link fillTransparent}), and
-   *   pixels past Web Mercator's latitude limit that of the limit at their
-   *   longitude.
+   *   has none of the tiles under it; where it has some, the pixels over a
+   *   missing one stay transparent. Its pixels past Web Mercator's latitude
+   *   limit take the value of the limit at their longitude.
    */
   async renderRasterTile(
     crs: Crs,
@@ -103,10 +102,11 @@ export class Warper {
     t1 = performance.now()
     timing.fetch = t1 - t
     t = t1
+    // Transparent black would be a DEM's lowest elevation all over the tile.
+    if (nearest && [...tiles.values()].every((tile) => tile === null)) return null
     const out = sampleField(field, TILE_SIZE, choice.z, source.tileSize, tiles, source.resampling)
-    const empty = nearest && !fillTransparent(out, field)
     timing.sample = performance.now() - t
-    return empty ? null : out
+    return out
   }
 
   /**

@@ -522,58 +522,6 @@ function sampleNearest(
   return { width: size, height: size, data: out }
 }
 
-/**
- * Give each fully transparent pixel that has a position in `field` the bytes
- * of the nearest pixel that is not transparent (by steps to a side neighbor
- * through pixels with a position), in place: where a nearest-sampled source
- * has no data, the value next to it rather than the zero bytes, which a DEM
- * decodes as its lowest elevation. Pixels without a position stay transparent.
- *
- * @returns Whether the image has any pixel that is not fully transparent;
- *   if not, it is left as it is.
- */
-export function fillTransparent(image: RgbaImage, field: MercatorField): boolean {
-  const { width, height, data } = image
-  const count = width * height
-  let valued = 0
-  let missing = 0
-  for (let k = 0; k < count; k++) {
-    if (data[4 * k + 3] !== 0) valued++
-    else if (!Number.isNaN(field[2 * k])) missing++
-  }
-  // The usual tile has nothing to fill.
-  if (valued === 0 || missing === 0) return valued !== 0
-
-  // Pixels with a value, in the order they got it: first the image's own.
-  const queue = new Int32Array(valued + missing)
-  // Pixels that take no value: those with one, and those with no position.
-  const filled = new Uint8Array(count)
-  let tail = 0
-  for (let k = 0; k < count; k++) {
-    if (data[4 * k + 3] !== 0) {
-      queue[tail++] = k
-      filled[k] = 1
-    } else if (Number.isNaN(field[2 * k])) {
-      filled[k] = 1
-    }
-  }
-  const spread = (from: number, to: number) => {
-    if (filled[to]) return
-    filled[to] = 1
-    data.copyWithin(4 * to, 4 * from, 4 * from + 4)
-    queue[tail++] = to
-  }
-  for (let head = 0; head < tail; head++) {
-    const k = queue[head]
-    const i = k % width
-    if (i > 0) spread(k, k - 1)
-    if (i < width - 1) spread(k, k + 1)
-    if (k >= width) spread(k, k - width)
-    if (k < count - width) spread(k, k + width)
-  }
-  return true
-}
-
 export function mod(a: number, n: number): number {
   return ((a % n) + n) % n
 }
