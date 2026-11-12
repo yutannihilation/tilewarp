@@ -16,6 +16,10 @@
  * tiles are `{source URL}/{z}/{x}/{y}.mvt` (a vector source, one with
  * `vector_layers`) or `.png` (a raster source). The TileJSON URL may be
  * relative to the page.
+ *
+ * `tilewarp://{epsg}/nearest/{TileJSON URL}` samples a raster source by
+ * nearest neighbor instead of bilinearly, as a `raster-dem` source needs. A
+ * source whose TileJSON has `encoding` is sampled so without the segment.
  */
 
 import { parseWkt } from '@developmentseed/proj'
@@ -23,6 +27,7 @@ import type { AddProtocolAction, CRS } from 'maplibre-gl'
 import proj4 from 'proj4'
 import type { EpsgProjJson } from '../crs.ts'
 import { buildCrs, fetchEpsgProjJson } from '../crs.ts'
+import type { Resampling } from '../source.ts'
 import type { TileFormat } from './engine.ts'
 import { runCall, WarpEngine } from './engine.ts'
 import type { Call, Request, Response } from './rpc.ts'
@@ -30,8 +35,9 @@ import type { Call, Request, Response } from './rpc.ts'
 /** The URL scheme to register the protocol under, as in the URLs it reads. */
 export const SCHEME = 'tilewarp'
 
-const TILEJSON_URL = /^tilewarp:\/\/(\d+)\/(.+)$/
-const TILE_URL = /^tilewarp:\/\/(\d+)\/(.+)\/(\d+)\/(\d+)\/(\d+)\.(mvt|png)$/
+// The optional `nearest/` before the TileJSON URL asks for nearest-neighbor sampling.
+const TILEJSON_URL = /^tilewarp:\/\/(\d+)\/(nearest\/)?(.+)$/
+const TILE_URL = /^tilewarp:\/\/(\d+)\/(nearest\/)?(.+)\/(\d+)\/(\d+)\/(\d+)\.(mvt|png)$/
 
 export interface WarpProtocolOptions {
   /**
@@ -90,19 +96,21 @@ export class WarpProtocol {
       const match = TILEJSON_URL.exec(params.url)
       if (match === null) throw new Error(`Not a ${SCHEME} source URL: ${params.url}`)
       const epsg = this.#checkAdded(match[1])
-      const source = resolveUrl(match[2])
-      const data = await this.#backend.call({ method: 'tileJson', epsg, source, url: params.url }, signal)
+      const source = resolveUrl(match[3])
+      const resampling = resamplingOf(match[2])
+      const data = await this.#backend.call({ method: 'tileJson', epsg, source, url: params.url, resampling }, signal)
       return { data: data as object }
     }
     const match = TILE_URL.exec(params.url)
     if (match === null) throw new Error(`Not a ${SCHEME} tile URL ({z}/{x}/{y}.mvt or .png): ${params.url}`)
     const request = {
       epsg: this.#checkAdded(match[1]),
-      source: resolveUrl(match[2]),
-      z: Number(match[3]),
-      x: Number(match[4]),
-      y: Number(match[5]),
-      format: match[6] as TileFormat,
+      resampling: resamplingOf(match[2]),
+      source: resolveUrl(match[3]),
+      z: Number(match[4]),
+      x: Number(match[5]),
+      y: Number(match[6]),
+      format: match[7] as TileFormat,
     }
     const data = await this.#backend.call({ method: 'tile', request }, signal)
     return { data: data as ArrayBuffer | ImageBitmap }
@@ -118,6 +126,11 @@ export class WarpProtocol {
     if (!this.#added.has(epsg)) throw new Error(`EPSG:${epsg} has not been added with addCrs`)
     return epsg
   }
+}
+
+/** What the source URL's optional segment asks for; without it, the source's default. */
+function resamplingOf(segment: string | undefined): Resampling | undefined {
+  return segment === undefined ? undefined : 'nearest'
 }
 
 /** The TileJSON URL resolved against the page, so the worker reads the same one. */

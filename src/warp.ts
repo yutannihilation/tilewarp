@@ -9,7 +9,7 @@
  *    pole, the antimeridian or points the CRS cannot place, or in a triangle
  *    with such a vertex) are computed with the exact transform instead.
  * 2. {@link chooseSourceZoom}: which source tiles to fetch.
- * 3. {@link sampleField}: bilinear sampling of the source tiles.
+ * 3. {@link sampleField}: bilinear or nearest-neighbor sampling of the source tiles.
  */
 
 import type { Affine } from '@developmentseed/affine'
@@ -18,7 +18,7 @@ import type { ProjectionFunction } from '@developmentseed/proj'
 import { RasterReprojector } from '@developmentseed/raster-reproject'
 import { HALF_WORLD, WORLD } from './mercator.ts'
 import type { RgbaImage } from './png.ts'
-import type { TileSource } from './source.ts'
+import type { Resampling, TileSource } from './source.ts'
 
 /** Maximum mesh error, in output pixels. */
 const MAX_ERROR = 0.125
@@ -60,12 +60,16 @@ export function mercatorPosition(affine: Affine, to3857: ProjectionFunction, px:
  * @param to3857 - target CRS → EPSG:3857, unclamped, `NaN` where the CRS has
  *   no such position
  * @param from3857 - EPSG:3857 → target CRS
+ * @param clampLatitude - give pixels past Web Mercator's latitude limit the
+ *   position on the limit at their longitude instead of none, so that a
+ *   source sampled by nearest neighbor has a value up to the pole
  */
 export function mercatorField(
   affine: Affine,
   size: number,
   to3857: ProjectionFunction,
   from3857: ProjectionFunction,
+  clampLatitude = false,
 ): MercatorField {
   const exact = (px: number, py: number) => {
     const [cx, cy] = apply(affine, px, py)
@@ -81,9 +85,14 @@ export function mercatorField(
 
   for (let k = 0; k < done.length; k++) {
     if (done[k]) continue
-    const [mx, my] = mercatorPosition(affine, to3857, (k % size) + 0.5, Math.floor(k / size) + 0.5)
-    field[2 * k] = mx
-    field[2 * k + 1] = my
+    const [mx, my] = exact((k % size) + 0.5, Math.floor(k / size) + 0.5)
+    if (inMercator(mx, my)) {
+      field[2 * k] = mx
+      field[2 * k + 1] = my
+    } else if (clampLatitude && Number.isFinite(mx) && !Number.isNaN(my)) {
+      field[2 * k] = mx
+      field[2 * k + 1] = clamp(my, -HALF_WORLD, HALF_WORLD)
+    }
   }
   return field
 }
@@ -216,6 +225,31 @@ export function medianPixelSize(field: MercatorField, size: number): number {
   return valid[count >> 1]
 }
 
+/**
+ * {@link medianPixelSize} for a field whose positions all lie on one line of
+ * latitude, where pixels have no area: the median distance in x to the
+ * neighbor further away of the right and lower ones, across the antimeridian
+ * if that is nearer. So is a tile wholly past Web Mercator's latitude limit
+ * once its positions are clamped to it. `NaN` if no pixel has one.
+ */
+function medianPixelWidth(field: MercatorField, size: number): number {
+  const widths = new Float64Array(Math.ceil((size - 1) / PIXEL_SIZE_STRIDE) ** 2)
+  let count = 0
+  const distance = (a: number, b: number) => {
+    const d = Math.abs(field[a] - field[b])
+    return d > HALF_WORLD ? WORLD - d : d
+  }
+  for (let j = 0; j < size - 1; j += PIXEL_SIZE_STRIDE) {
+    for (let i = 0; i < size - 1; i += PIXEL_SIZE_STRIDE) {
+      const k = 2 * (j * size + i)
+      const w = Math.max(distance(k, k + 2), distance(k, k + 2 * size))
+      if (Number.isFinite(w) && w > 0) widths[count++] = w
+    }
+  }
+  if (count === 0) return Number.NaN
+  return widths.subarray(0, count).sort()[count >> 1]
+}
+
 /** Key of source tile `x`, `y` at zoom `z`; see {@link tileFromKey}. */
 export function tileKey(z: number, x: number, y: number): number {
   return y * 2 ** z + x
@@ -242,6 +276,18 @@ function clampRow(y: number, extent: number): number {
 /** {@link tileKey} of the tile holding wrapped/clamped texel `gx`, `gy`. */
 function tileKeyOfTexel(z: number, tileSize: number, gx: number, gy: number): number {
   return tileKey(z, Math.floor(gx / tileSize), Math.floor(gy / tileSize))
+}
+
+/*
+ * The texel nearest-neighbor sampling reads at a Mercator position: the one
+ * containing it (texel `i` spans global pixel coordinates `[i, i + 1)`).
+ */
+function nearestColumn(mx: number, scale: number, extent: number): number {
+  return wrapColumn(Math.floor((mx + HALF_WORLD) * scale), extent)
+}
+
+function nearestRow(my: number, scale: number, extent: number): number {
+  return clampRow(Math.floor((HALF_WORLD - my) * scale), extent)
 }
 
 /** Keys ({@link tileKey}) of the source tiles a field samples at zoom `z`. */
@@ -279,6 +325,25 @@ function sourceTileKeys(field: MercatorField, z: number, tileSize: number): Set<
   return keys
 }
 
+/** {@link sourceTileKeys} for nearest-neighbor sampling: one texel per position. */
+function nearestTileKeys(field: MercatorField, z: number, tileSize: number): Set<number> {
+  const extent = 2 ** z * tileSize
+  const scale = extent / WORLD
+  const keys = new Set<number>()
+  // Neighboring pixels nearly always land in the same tile.
+  let lastKey = -1
+  for (let k = 0; k < field.length; k += 2) {
+    const mx = field[k]
+    if (Number.isNaN(mx)) continue
+    const key = tileKeyOfTexel(z, tileSize, nearestColumn(mx, scale, extent), nearestRow(field[k + 1], scale, extent))
+    if (key !== lastKey) {
+      keys.add(key)
+      lastKey = key
+    }
+  }
+  return keys
+}
+
 /**
  * The deepest source zoom read: {@link tileKey} is exact while `4^z` stays
  * within `Number.MAX_SAFE_INTEGER`. A z26 tile is about 60 cm wide.
@@ -300,25 +365,29 @@ const MAX_SOURCE_ZOOM = 26
 export function chooseSourceZoom(
   field: MercatorField,
   size: number,
-  source: Pick<TileSource, 'minzoom' | 'maxzoom' | 'tileSize'>,
+  source: Pick<TileSource, 'minzoom' | 'maxzoom' | 'tileSize' | 'resampling'>,
   maxTiles: number,
 ): { z: number; keys: Set<number> } | null {
-  const pixelSize = medianPixelSize(field, size)
+  let pixelSize = medianPixelSize(field, size)
+  // A nearest field wholly past the latitude limit is clamped onto it.
+  if (Number.isNaN(pixelSize) && source.resampling === 'nearest') pixelSize = medianPixelWidth(field, size)
   if (Number.isNaN(pixelSize)) return null
   const ideal = Math.round(Math.log2(WORLD / (source.tileSize * pixelSize)))
   let z = clamp(ideal, source.minzoom, Math.min(source.maxzoom, MAX_SOURCE_ZOOM))
-  let keys = sourceTileKeys(field, z, source.tileSize)
+  const tileKeys = source.resampling === 'nearest' ? nearestTileKeys : sourceTileKeys
+  let keys = tileKeys(field, z, source.tileSize)
   while (keys.size > maxTiles && z > source.minzoom) {
     z--
-    keys = sourceTileKeys(field, z, source.tileSize)
+    keys = tileKeys(field, z, source.tileSize)
   }
   if (keys.size > maxTiles) return null
   return { z, keys }
 }
 
 /**
- * Bilinearly sample source tiles at each field position into an RGBA tile,
- * with premultiplied alpha so missing tiles do not darken edges.
+ * Sample source tiles at each field position into an RGBA tile. `bilinear`
+ * blends with premultiplied alpha so missing tiles do not darken edges;
+ * `nearest` copies the texel under the position, bytes unchanged.
  *
  * @param tiles - decoded tiles by {@link tileKey}; `null` or absent is transparent
  */
@@ -328,7 +397,9 @@ export function sampleField(
   z: number,
   tileSize: number,
   tiles: ReadonlyMap<number, RgbaImage | null>,
+  resampling: Resampling = 'bilinear',
 ): RgbaImage {
+  if (resampling === 'nearest') return sampleNearest(field, size, z, tileSize, tiles)
   const n = 2 ** z
   const extent = n * tileSize
   const scale = extent / WORLD
@@ -412,6 +483,41 @@ export function sampleField(
     out[o + 1] = Math.round(g / a)
     out[o + 2] = Math.round(b / a)
     out[o + 3] = Math.round(a)
+  }
+  return { width: size, height: size, data: out }
+}
+
+function sampleNearest(
+  field: MercatorField,
+  size: number,
+  z: number,
+  tileSize: number,
+  tiles: ReadonlyMap<number, RgbaImage | null>,
+): RgbaImage {
+  const extent = 2 ** z * tileSize
+  const scale = extent / WORLD
+  const out = new Uint8Array(size * size * 4)
+
+  // Neighboring pixels nearly always read the same tile.
+  let lastKey = -1
+  let lastData: Uint8Array | undefined
+  for (let k = 0; k < size * size; k++) {
+    const mx = field[2 * k]
+    if (Number.isNaN(mx)) continue
+    const gx = nearestColumn(mx, scale, extent)
+    const gy = nearestRow(field[2 * k + 1], scale, extent)
+    const key = tileKeyOfTexel(z, tileSize, gx, gy)
+    if (key !== lastKey) {
+      lastKey = key
+      lastData = tiles.get(key)?.data
+    }
+    if (!lastData) continue
+    const i = ((gy % tileSize) * tileSize + (gx % tileSize)) * 4
+    const o = k * 4
+    out[o] = lastData[i]
+    out[o + 1] = lastData[i + 1]
+    out[o + 2] = lastData[i + 2]
+    out[o + 3] = lastData[i + 3]
   }
   return { width: size, height: size, data: out }
 }

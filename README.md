@@ -4,7 +4,7 @@ Reproject Web Mercator XYZ tiles into an arbitrary CRS, one output tile at a
 time, for MapLibre GL JS's
 [custom CRS](https://maplibre.org/maplibre-gl-js/docs/guides/custom-crs/):
 vector tiles (MVT) feature by feature, raster tiles (PNG, JPEG, WebP) by
-resampling.
+resampling, DEM tiles (`raster-dem`) by nearest neighbor.
 
 MapLibre can show a map in a registered CRS, but it does not reproject tile
 content. For an output tile in the CRS's grid, tilewarp fetches the Web
@@ -46,6 +46,35 @@ new maplibregl.Map({
   `vector_layers`) or `.png` for a raster one, and it carries the source's
   `attribution`, layers and the zoom beyond which the map overzooms. A source
   without a TileJSON needs one written for it (see `example/public/blue-marble.json`).
+- **DEM sources.** Raster tiles are sampled bilinearly, which blends the
+  bytes a Terrain-RGB or Terrarium tile packs an elevation into. Put
+  `nearest/` before the TileJSON URL and each output pixel is a copy of the
+  source pixel under it:
+
+  ```ts
+  dem: { type: 'raster-dem', url: 'tilewarp://6677/nearest/https://example.com/terrain/tiles.json', tileSize: 256 }
+  ```
+
+  A source whose TileJSON has `encoding` (`terrarium`, `mapbox`, `custom`) is
+  sampled this way without the segment, and the reprojected TileJSON passes
+  `encoding` on. A relative TileJSON URL that itself starts with `nearest/`
+  is written `./nearest/…`. DEM tiles are often 512px: the TileJSON must then
+  say `"tileSize": 512`, as for any raster source whose tiles are not 256px.
+  Three more things differ for a source sampled this way:
+  - Its reprojected TileJSON has the `maxzoom` at which an output pixel is
+    nearest in size to the source's at its own `maxzoom` (by the grid's
+    median scale), so the map overzooms beyond it rather than receive tiles
+    of repeated pixels.
+  - Past Web Mercator's latitude limit (85.05°) a pixel takes the value of
+    the limit at the same longitude, since transparent black would decode as
+    the encoding's lowest elevation. Nothing else is filled in: where the
+    source has no tile, and outside the CRS's own domain (around a world
+    projection's outline), pixels stay transparent, so a hole in the source
+    shows as a pit. A tile for which the source has no tile at all is
+    answered with no image, which MapLibre takes as no tile.
+  - The source zoom is still the one nearest to the output's resolution, so
+    a source pixel is between 0.71 and 1.41 output pixels wide: up to half
+    the source pixels are skipped, or some are repeated.
 - **Source tiles.** `{z}`, `{x}`, `{y}`, `{-y}` and `scheme: "tms"` are
   understood. 404, 204 and an empty body mean no tile there; gzipped tiles
   are gunzipped even without `Content-Encoding`. Other HTTP errors and failed
@@ -111,8 +140,13 @@ const mvt = await warper.renderVectorTile(crs, source, 3, 4, 3, createVectorTimi
 `Warper` reads any `MercatorSource` (`id`, `minzoom`, `maxzoom`, `tileSize`
 and `tile(z, x, y)`): `XyzSource` for HTTPS, or your own, such as a reader for
 a PMTiles archive. It keeps the source tiles it decoded in memory, within the
-budgets given. Raster decoding is injected: `browserDecoder` decodes 8-bit PNG
-in JS and everything else with the browser.
+budgets given. A source with `resampling: 'nearest'` is sampled by nearest
+neighbor instead of bilinearly (`xyzSourceFromTileJson(url, { resampling:
+'nearest' })`; the default for a TileJSON with `encoding`), and
+`renderRasterTile` answers `null` for a tile the source has no tiles for (see
+DEM sources). `rasterMaxZoom` gives the output zoom past which such a source
+would repeat its pixels. Raster decoding is injected: `browserDecoder` decodes
+8-bit PNG in JS and everything else with the browser.
 
 ## How it works
 

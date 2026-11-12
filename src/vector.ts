@@ -606,19 +606,26 @@ function reach(sampleAt: SampleAt, ai: number, aj: number, bi: number, bj: numbe
 }
 
 /**
- * The output zoom beyond which a client should overzoom instead of asking:
- * the smallest zoom whose tile is no larger in Mercator meters than a source
- * tile at the source's `maxzoom`, by the tile matrix set's median scale (the
- * same measure the zoom choice uses, which ignores where the CRS has no
- * Mercator position, such as a pole). `maxZoom` if nowhere has one.
+ * Width of output tile 0/0/0 in Mercator meters, by the tile matrix set's
+ * median scale (the same measure the zoom choice uses, which ignores where
+ * the CRS has no Mercator position, such as a pole). `NaN` if nowhere has one.
  */
-export function vectorMaxZoom(crs: Crs, sourceMaxZoom: number, maxZoom: number): number {
+export function tileZeroMeters(crs: Crs): number {
   const size = MAX_ZOOM_FIELD_SIZE
   const field = mercatorField(tileAffine(crs.tms, 0, 0, 0, size), size, crs.to3857, crs.from3857)
-  const metersPerSample = medianPixelSize(field, size)
-  if (Number.isNaN(metersPerSample)) return maxZoom
-  // Tile 0/0/0 is `size` samples wide; a tile at zoom z is 2^z times narrower.
-  const tile0Meters = size * metersPerSample
+  return size * medianPixelSize(field, size)
+}
+
+/**
+ * The output zoom beyond which a client should overzoom instead of asking:
+ * the smallest zoom whose tile is no larger in Mercator meters than a source
+ * tile at the source's `maxzoom`, by {@link tileZeroMeters}. `maxZoom` if
+ * nowhere has a Mercator position.
+ */
+export function vectorMaxZoom(crs: Crs, sourceMaxZoom: number, maxZoom: number): number {
+  // A tile at zoom z is 2^z times narrower than tile 0/0/0.
+  const tile0Meters = tileZeroMeters(crs)
+  if (Number.isNaN(tile0Meters)) return maxZoom
   const sourceTileMeters = WORLD / 2 ** sourceMaxZoom
   const z = Math.ceil(Math.log2(tile0Meters / sourceTileMeters))
   return Math.min(maxZoom, Math.max(0, z))

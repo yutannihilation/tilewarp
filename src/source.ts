@@ -2,12 +2,21 @@
 
 import type { RgbaImage } from './png.ts'
 
+/**
+ * How raster source tiles are sampled: `bilinear` blends the four texels
+ * around a position; `nearest` copies the one under it, for tiles whose bytes
+ * encode values rather than colors (a DEM's elevations).
+ */
+export type Resampling = 'bilinear' | 'nearest'
+
 /** What the warp needs to know about the Web Mercator XYZ source. */
 export interface TileSource {
   minzoom: number
   maxzoom: number
   /** Width and height of every source tile in pixels. */
   tileSize: number
+  /** Raster only. Default `bilinear`. */
+  resampling?: Resampling
 }
 
 /**

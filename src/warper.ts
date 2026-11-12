@@ -9,12 +9,13 @@ import type { Crs } from './crs.ts'
 import { SourceError } from './errors.ts'
 import { LruCache } from './lru.ts'
 import { memoized } from './memo.ts'
+import { WORLD } from './mercator.ts'
 import type { RgbaImage } from './png.ts'
-import type { MercatorSource, RasterDecoder } from './source.ts'
+import type { MercatorSource, RasterDecoder, TileSource } from './source.ts'
 import type { RasterTiming, VectorTiming } from './timing.ts'
 import { tileAffine } from './tms.ts'
 import type { SourceTile } from './vector.ts'
-import { prepareSourceTile, renderVectorTile } from './vector.ts'
+import { prepareSourceTile, renderVectorTile, tileZeroMeters } from './vector.ts'
 import { chooseSourceZoom, mercatorField, sampleField, tileFromKey } from './warp.ts'
 
 /** Width and height of a raster output tile in pixels. */
@@ -60,7 +61,10 @@ export class Warper {
    *   reads under way still finish and are cached, as other tiles share them.
    * @returns `null` when no pixel of the tile is in Web Mercator, or when the
    *   tile is too coarse for the source (it would read too many tiles even at
-   *   the source's `minzoom`).
+   *   the source's `minzoom`). For a `nearest` source, also when the source
+   *   has none of the tiles under it; where it has some, the pixels over a
+   *   missing one stay transparent. Its pixels past Web Mercator's latitude
+   *   limit take the value of the limit at their longitude.
    */
   async renderRasterTile(
     crs: Crs,
@@ -73,7 +77,8 @@ export class Warper {
   ): Promise<RgbaImage | null> {
     let t = performance.now()
     const affine = tileAffine(crs.tms, z, x, y, TILE_SIZE)
-    const field = mercatorField(affine, TILE_SIZE, crs.to3857, crs.from3857)
+    const nearest = source.resampling === 'nearest'
+    const field = mercatorField(affine, TILE_SIZE, crs.to3857, crs.from3857, nearest)
     let t1 = performance.now()
     timing.field = t1 - t
     t = t1
@@ -97,7 +102,9 @@ export class Warper {
     t1 = performance.now()
     timing.fetch = t1 - t
     t = t1
-    const out = sampleField(field, TILE_SIZE, choice.z, source.tileSize, tiles)
+    // Transparent black would be a DEM's lowest elevation all over the tile.
+    if (nearest && [...tiles.values()].every((tile) => tile === null)) return null
+    const out = sampleField(field, TILE_SIZE, choice.z, source.tileSize, tiles, source.resampling)
     timing.sample = performance.now() - t
     return out
   }
@@ -198,6 +205,21 @@ export class Warper {
     }
     return read
   }
+}
+
+/**
+ * The output zoom beyond which a client should overzoom a raster source
+ * instead of asking: the one whose pixels are nearest in size to the source's
+ * at its `maxzoom`, which is the last zoom the zoom choice does not clamp
+ * to `maxzoom`. Beyond it a `nearest` source would repeat its pixels. By
+ * {@link tileZeroMeters}; `maxZoom` if nowhere has a Mercator position.
+ */
+export function rasterMaxZoom(crs: Crs, source: Pick<TileSource, 'maxzoom' | 'tileSize'>, maxZoom: number): number {
+  const pixel0Meters = tileZeroMeters(crs) / TILE_SIZE
+  if (Number.isNaN(pixel0Meters)) return maxZoom
+  const sourcePixelMeters = WORLD / (2 ** source.maxzoom * source.tileSize)
+  const z = Math.round(Math.log2(pixel0Meters / sourcePixelMeters))
+  return Math.min(maxZoom, Math.max(0, z))
 }
 
 function rgbaBytes(tileSize: number): number {
