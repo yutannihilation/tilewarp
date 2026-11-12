@@ -1,6 +1,6 @@
 {
   "name": "@yutannihilation/tilewarp",
-  "version": "0.0.1-rc.1",
+  "version": "0.0.1-rc.2",
   "description": "Reproject Web Mercator XYZ tiles (vector and raster) into a custom CRS, one tile request at a time, with a MapLibre GL JS protocol",
   "license": "MIT",
   "repository": {
