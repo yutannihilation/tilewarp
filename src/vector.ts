@@ -12,7 +12,7 @@ import { compose, invert, scale, translation } from '@developmentseed/affine'
 import type { ProjectionFunction } from '@developmentseed/proj'
 import { nearestCopy } from '@developmentseed/proj'
 import type { Crs } from './crs.ts'
-import { NO_POSITION } from './crs.ts'
+import { NO_POSITION, SEAM_MARGIN } from './crs.ts'
 import { HALF_WORLD, MERCATOR_TMS, WORLD } from './mercator.ts'
 import { insertTouches, quantizeLine, quantizePolygon } from './mvt/clean.ts'
 import type { Rect } from './mvt/clip.ts'
@@ -261,21 +261,16 @@ export async function renderVectorTile(
         maxX: cover.maxX * layer.extent,
         maxY: cover.maxY * layer.extent,
       }
+      const sides = seamSides(wanted, crs.seam, choice.z, sx, layer.extent)
       let out = layers.get(layer.name)
       for (const { feature, bbox } of layer.features) {
-        if (!overlaps(bbox, wanted)) continue
         // Only what can reach the output tile goes through the projection.
-        let visible: Geometry | null
-        if (contains(wanted, bbox)) {
-          visible = feature.geometry
-        } else {
-          visible = clipGeometry(feature.geometry, wanted, wanted)
+        for (const visible of visiblePieces(feature.geometry, bbox, wanted, sides)) {
+          const geometry = reproject(visible, transform, output)
+          if (geometry === null) continue
+          out ??= { name: layer.name, extent: OUTPUT_EXTENT, features: [] }
+          out.features.push({ ...feature, geometry })
         }
-        if (visible === null) continue
-        const geometry = reproject(visible, transform, output)
-        if (geometry === null) continue
-        out ??= { name: layer.name, extent: OUTPUT_EXTENT, features: [] }
-        out.features.push({ ...feature, geometry })
       }
       if (out !== undefined) layers.set(layer.name, out)
     }
@@ -291,6 +286,40 @@ export async function renderVectorTile(
     timing.bytes = encoded.byteLength
   }
   return encoded
+}
+
+/**
+ * `rect` (in units of source tile column `sx` at zoom `z`), or its parts on
+ * each side of the seam when the seam crosses it, each ending
+ * {@link SEAM_MARGIN} short of the seam.
+ */
+function seamSides(rect: Rect, seam: number | null, z: number, sx: number, extent: number): Rect[] {
+  if (seam === null) return [rect]
+  const unitsPerMeter = (2 ** z * extent) / WORLD
+  const x = (seam + HALF_WORLD) * unitsPerMeter - sx * extent
+  const margin = SEAM_MARGIN * unitsPerMeter
+  if (x + margin <= rect.minX || x - margin >= rect.maxX) return [rect]
+  const sides: Rect[] = []
+  if (x - margin > rect.minX) sides.push({ ...rect, maxX: x - margin })
+  if (x + margin < rect.maxX) sides.push({ ...rect, minX: x + margin })
+  return sides
+}
+
+/**
+ * What of a feature's geometry lies in `wanted`, as the pieces to transform.
+ * A line or a polygon is clipped to each of `sides` ({@link seamSides} of
+ * `wanted`) on its own: one that crosses the seam would land on both ends of
+ * the map at once. A point lands on one end, so points are clipped to
+ * `wanted` whole.
+ */
+function visiblePieces(geometry: Geometry, bbox: Bbox, wanted: Rect, sides: Rect[]): Geometry[] {
+  const pieces: Geometry[] = []
+  for (const rect of geometry.type === 1 ? [wanted] : sides) {
+    if (!overlaps(bbox, rect)) continue
+    const piece = contains(rect, bbox) ? geometry : clipGeometry(geometry, rect, rect)
+    if (piece !== null) pieces.push(piece)
+  }
+  return pieces
 }
 
 function overlaps(box: Bbox, r: Rect): boolean {

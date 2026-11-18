@@ -5,7 +5,7 @@ import { nearestCopy, parseWkt } from '@developmentseed/proj'
 import proj4 from 'proj4'
 import { CrsError, UpstreamError } from './errors.ts'
 import { memoized } from './memo.ts'
-import { WORLD } from './mercator.ts'
+import { HALF_WORLD, WORLD } from './mercator.ts'
 import type { TileMatrixSet } from './tms.ts'
 import { tmsFromAreaOfUse } from './tms.ts'
 
@@ -42,6 +42,13 @@ export interface Crs {
    * domain). Twice the cost of {@link from3857}.
    */
   from3857Checked: ProjectionFunction
+  /**
+   * Web Mercator x (meters) of the meridian along which the CRS cuts the
+   * world open, where positions on its two sides land apart (the meridian
+   * opposite an Equal Earth's center, or a cone's cut); `null` when there is
+   * none, or none that is a single meridian.
+   */
+  seam: number | null
 }
 
 /**
@@ -91,6 +98,95 @@ function roundTripped(
   }
 }
 
+/** Steps per parallel that {@link seamOnParallel} walks, a degree each. */
+const SEAM_SAMPLES = 360
+/**
+ * Mercator y of the parallels {@link findSeam} searches (about 47°S, 9°N and
+ * 58°N): in both hemispheres and away from the poles, where a cone's cut
+ * closes up.
+ */
+const SEAM_PARALLELS = [-6e6, 1e6, 8e6]
+/** A step this many times its parallel's median step is looked into. */
+const SEAM_CANDIDATE = 4
+/** Halvings of a candidate step's interval: from a degree to far below a millimeter. */
+const SEAM_HALVINGS = 60
+/** A step still this long after the halvings, relative to the tile matrix set's size, is a seam. */
+const SEAM_JUMP = 1e-4
+/** Largest difference, in Mercator meters, between the parallels' answers for one meridian. */
+const SEAM_AGREEMENT = 1e-3
+
+/**
+ * Mercator meters to keep clear of {@link Crs.seam} on each side when
+ * cutting geometry there. proj4 answers on one fixed side for a point within
+ * a micrometer of the seam (it wraps longitudes only beyond a value slightly
+ * over π), so geometry cut exactly on it would have ends on the wrong side.
+ * A centimeter is under a fiftieth of a source tile unit at zoom 14.
+ */
+export const SEAM_MARGIN = 0.01
+
+function distance(p: [number, number], q: [number, number]): number {
+  return Math.hypot(q[0] - p[0], q[1] - p[1])
+}
+
+/**
+ * The Mercator x where `from3857` is discontinuous along the parallel at
+ * `y`, or `null` unless there is exactly one such place. The parallel is
+ * walked in steps; a step much longer than the rest is halved towards its
+ * longer half until the interval is tiny. A continuous map's step shrinks
+ * with its interval, a seam's does not.
+ */
+function seamOnParallel(from3857: ProjectionFunction, y: number, extentAtZoom0: number): number | null {
+  const width = WORLD / SEAM_SAMPLES
+  const images: [number, number][] = []
+  for (let i = 0; i <= SEAM_SAMPLES; i++) images.push(from3857(i * width - HALF_WORLD, y))
+  const steps = images.slice(1).map((p, i) => distance(images[i], p))
+  // A step from or to a point without a finite image is the domain's edge,
+  // not a seam: it is left out of the median and is never a candidate.
+  const finite = steps.filter(Number.isFinite).sort((a, b) => a - b)
+  const median = finite[finite.length >> 1]
+  let seam: number | null = null
+  for (let i = 0; i < steps.length; i++) {
+    if (!Number.isFinite(steps[i]) || steps[i] <= SEAM_CANDIDATE * median) continue
+    let a = i * width - HALF_WORLD
+    let b = a + width
+    let pa = images[i]
+    let pb = images[i + 1]
+    for (let k = 0; k < SEAM_HALVINGS; k++) {
+      const m = (a + b) / 2
+      const pm = from3857(m, y)
+      if (distance(pa, pm) > distance(pm, pb)) {
+        b = m
+        pb = pm
+      } else {
+        a = m
+        pa = pm
+      }
+    }
+    const jump = distance(pa, pb)
+    if (!Number.isFinite(jump) || jump <= SEAM_JUMP * extentAtZoom0) continue
+    if (seam !== null) return null
+    seam = (a + b) / 2
+  }
+  return seam
+}
+
+/**
+ * The Mercator x of the meridian `from3857` is discontinuous along, or
+ * `null`. Every parallel must find one seam ({@link seamOnParallel}), on the
+ * same meridian: a jump that only some parallels meet (an oblique
+ * projection's) is not a meridian to cut along.
+ */
+function findSeam(from3857: ProjectionFunction, extentAtZoom0: number): number | null {
+  let seam: number | null = null
+  for (const y of SEAM_PARALLELS) {
+    const found = seamOnParallel(from3857, y, extentAtZoom0)
+    if (found === null) return null
+    if (seam !== null && Math.abs(found - seam) > SEAM_AGREEMENT) return null
+    seam ??= found
+  }
+  return seam
+}
+
 /** Build a {@link Crs}. Pure apart from proj4's global definition cache. */
 export function buildCrs(epsg: number, projjson: EpsgProjJson): Crs {
   // A geocentric CRS (X/Y/Z from the Earth's center) has no plane to tile:
@@ -123,7 +219,8 @@ export function buildCrs(epsg: number, projjson: EpsgProjJson): Crs {
     // A longitude wrapped by proj4 comes back a world away in x.
     return Math.hypot(nearestCopy(bx, x, WORLD) - x, by - y) <= MERCATOR_TOLERANCE
   })
-  return { epsg, projjson, tms, to3857, from3857, from3857Checked }
+  const seam = findSeam(from3857, tms.extentAtZoom0)
+  return { epsg, projjson, tms, to3857, from3857, from3857Checked, seam }
 }
 
 /**
