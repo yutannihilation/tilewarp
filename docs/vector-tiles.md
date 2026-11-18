@@ -202,6 +202,18 @@ image, the tile lies inside the domain and is transformed unchecked. The grid
 also measures how much the transform bends, which gives the longest segment
 the tile bends by no more than one output unit: its _segment limit_.
 
+Some projections cut the world open along a meridian: the one opposite an
+Equal Earth's center, or the cut of a cone. A feature that crosses it would
+land on both ends of the map at once. The meridian is found once per CRS
+(`Crs.seam`): along a parallel, it is where the projection's answers for two
+points stay apart however close the points are taken, at the same longitude
+on each of three parallels. In a source tile the seam runs through, lines and
+polygons are clipped to each side of it separately, with the same clippers as
+for the coverage, and each side is transformed as a feature of its own. Each
+side stops a centimeter short of the seam, because proj4 puts a point within
+a micrometer of it on one fixed side. Points are left alone: a point lands on
+one side whichever it is.
+
 ### 5. Densification
 
 A straight segment in the source is a curve in the target. A segment whose
@@ -214,8 +226,9 @@ again, to a depth of eight.
 ![Adaptive densification](figures/densify.svg)
 
 Where a vertex or a midpoint has no image, or where at the recursion limit a
-tiny piece still jumps across half the tile matrix set (a projection seam),
-a line is split and a ring is dropped.
+tiny piece still jumps across half the tile matrix set (a projection seam
+that was not cut beforehand, because it is not a single meridian), a line is
+split and a ring is dropped.
 
 [Transforming a source tile](vector-transform.md) shows the grid test, the
 segment limit and the densification with figures.
@@ -260,7 +273,7 @@ flowchart TD
     A["field: 65 × 65 samples over tile + buffer<br/>mercatorField"] --> B["source zoom and tiles<br/>chooseSourceZoom"]
     B --> C["coverage per source tile, cell by cell<br/>sourceCoverage"]
     C --> D["transform per source tile<br/>grid → checked or unchecked, segment limit"]
-    D --> E["clip features to the coverage<br/>clipGeometry"]
+    D --> E["clip features to the coverage, on each side of the seam<br/>seamSides, clipGeometry"]
     E --> F["transform + densify<br/>transformLine, transformRing"]
     F --> G["clip to tile + buffer<br/>clipLine, clipRing"]
     G --> H["quantize, winding<br/>quantizeLine, quantizePolygon"]
@@ -282,7 +295,7 @@ flowchart TD
 | `src/xyz.ts`                                  | an HTTPS XYZ source from a TileJSON                                            |
 | `src/warper.ts`                               | source tile caches, the raster render                                          |
 | `src/decode.ts`                               | raster source tiles: 8-bit PNG in JS, the rest with the browser                |
-| `src/crs.ts`                                  | CRS from PROJJSON, checked projections                                         |
+| `src/crs.ts`                                  | CRS from PROJJSON, checked projections, the seam                               |
 | `src/tms.ts`                                  | tile matrix set and tile affines                                               |
 | `src/warp.ts`                                 | the field and the source zoom choice (shared with raster)                      |
 | `src/vector.ts`                               | the pipeline: coverage, transform choice, reproject, merge                     |
@@ -298,8 +311,14 @@ flowchart TD
   without touching (a narrow neck, a hole close to its exterior) can cross
   after rounding to integers, and MapLibre may then fill a small wrong
   triangle there ([details](polygon-pitfalls.md#2-rounding-touching-rings-and-near-misses)).
-- A projection whose seam falls inside a source tile (an Equal Earth not
-  centered on Greenwich) splits lines and drops rings there.
+- A line or polygon that crosses the projection's seam comes out as one
+  feature per side, with an edge along the seam, and a stretch of a line that
+  runs exactly along the seam is left out. Fills end at a cone's cut and do
+  not bridge the gap behind it. A seam that is not a single meridian is not
+  cut beforehand: an oblique projection's, or a cone's cut that a datum shift
+  moves by more than a millimeter between parallels (EPSG:3577, say). What
+  crosses such a seam is split or dropped where the jump is long enough to
+  be noticed, and joined across it where it is not.
 - An output tile whose data is a strip thinner than a field cell (about 130
   units, 4 px) at the latitude limit or a world projection's limb, with no
   field sample in it, is served empty.

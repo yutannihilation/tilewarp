@@ -76,7 +76,9 @@ subdivided adaptively in source coordinates (`densify`):
 
 Where a vertex or a midpoint has no image, or where at the recursion limit a
 tiny piece still jumps across half the tile matrix set's width (a projection
-seam), the segment is marked: a line is split there, and a ring is dropped.
+seam other than the meridian features are
+[cut at beforehand](vector-tiles.md#4-the-transform)), the segment is marked:
+a line is split there, and a ring is dropped.
 
 ## What comes out
 
